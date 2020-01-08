@@ -33,11 +33,15 @@ protected:
 
 	/** The water surface mesh component */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = Components)
-	class UProceduralMeshComponent* SurfaceComp;
+	class UBoxComponent* BoxCollisionComp;
+
+	/** The water surface mesh component */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = Components)
+	class UProceduralMeshComponent* SurfaceMeshComp;
 
 	/** The water body mesh component */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = Components)
-	class UProceduralMeshComponent* BodyComp;
+	class UProceduralMeshComponent* BodyMeshComp;
 
 protected:
 
