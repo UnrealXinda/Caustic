@@ -15,10 +15,10 @@
 	"IsExperimentalVersion": false,
 	"Installed": false,
 	"Modules": [
-		{
-			"Name": "Caustic",
-			"Type": "Runtime",
-			"LoadingPhase": "Default"
-		}
+    {
+      "Name": "Caustic",
+      "Type": "Runtime",
+      "LoadingPhase": "PostConfigInit"
+    }
 	]
 }

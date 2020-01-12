@@ -1,0 +1,17 @@
+#include "/Engine/Private/Common.ush"
+#include "CausticCommon.ush"
+
+RWTexture2D<float4> OutputDepthTexture;
+Texture2D<float> InputDepthTexture;
+
+// Encodes a single float depth texture to full float4 RGBA texture to perserve precision
+[numthreads(32, 32, 1)]
+void ComputeSurfaceDepth(uint3 ThreadId : SV_DispatchThreadID)
+{
+    float MinDepth = SurfaceDepthUniform.MinDepth;
+    float MaxDepth = SurfaceDepthUniform.MaxDepth;
+    float Depth = InputDepthTexture.Load(int3(ThreadId.xy, 0));
+    float NormalizedDepth = (Depth - MinDepth) / (MaxDepth - MinDepth);
+    
+    OutputDepthTexture[ThreadId.xy] = EncodeDepth(NormalizedDepth);
+}

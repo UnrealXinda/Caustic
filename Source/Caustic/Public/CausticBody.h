@@ -4,6 +4,8 @@
 
 #include "CoreMinimal.h"
 #include "GameFramework/Actor.h"
+#include "Pass/SurfaceDepthPass.h"
+#include "Engine/Classes/Engine/TextureRenderTarget2D.h"
 #include "CausticBody.generated.h"
 
 UCLASS()
@@ -42,6 +44,18 @@ protected:
 	/** The water body mesh component */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = Components)
 	class UProceduralMeshComponent* BodyMeshComp;
+
+	/** Scene capture component that captures depth texture */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = Components)
+	class USceneCaptureComponent2D* DepthCaptureComp;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Pass Debug Textures")
+	UTextureRenderTarget2D* SurfaceDepthPassDebugTexture;
+
+	UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, Category = "Pass Debug Textures")
+	UTextureRenderTarget2D* DepthRenderTarget;
+
+	TUniquePtr<FSurfaceDepthPassRenderer> SurfaceDepthPassRenderer;
 
 protected:
 

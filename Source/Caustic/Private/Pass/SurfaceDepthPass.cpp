@@ -1,67 +1,166 @@
 // Copyright 1998-2019 Epic Games, Inc. All Rights Reserved.
 
 #include "SurfaceDepthPass.h"
+#include "RenderCore/Public/GlobalShader.h"
+#include "RenderCore/Public/ShaderParameterUtils.h"
+#include "RenderCore/Public/ShaderParameterMacros.h"
+
+#include "Public/GlobalShader.h"
+#include "Public/PipelineStateCache.h"
+#include "Public/RHIStaticStates.h"
+#include "Public/SceneUtils.h"
+#include "Public/SceneInterface.h"
+#include "Public/ShaderParameterUtils.h"
+#include "Public/Logging/MessageLog.h"
+#include "Public/Internationalization/Internationalization.h"
+#include "Public/StaticBoundShaderState.h"
+#include "RHI/Public/RHICommandList.h"
 #include "Components/PrimitiveComponent.h"
 
-class FSurfaceDepthVertexShader : public FGlobalShader
+BEGIN_GLOBAL_SHADER_PARAMETER_STRUCT(FSurfaceDepthComputeShaderParameters, )
+	SHADER_PARAMETER(float, MinDepth)
+	SHADER_PARAMETER(float, MaxDepth)
+END_GLOBAL_SHADER_PARAMETER_STRUCT()
+IMPLEMENT_GLOBAL_SHADER_PARAMETER_STRUCT(FSurfaceDepthComputeShaderParameters, "SurfaceDepthUniform");
+
+class FSurfaceDepthComputeShader : public FGlobalShader
 {
-	DECLARE_GLOBAL_SHADER(FSurfaceDepthVertexShader);
-	SHADER_USE_PARAMETER_STRUCT(FSurfaceDepthVertexShader, FGlobalShader);
+	DECLARE_GLOBAL_SHADER(FSurfaceDepthComputeShader);
 
 public:
 
-	BEGIN_GLOBAL_SHADER_PARAMETER_STRUCT(FParameters, )
-		SHADER_PARAMETER(FMatrix, Model)
-		SHADER_PARAMETER(FMatrix, View)
-		SHADER_PARAMETER(FMatrix, Projection)
-		SHADER_PARAMETER(float,   MinDepth)
-		SHADER_PARAMETER(float,   MaxDepth)
-	END_GLOBAL_SHADER_PARAMETER_STRUCT()
+	FSurfaceDepthComputeShader() {}
+	FSurfaceDepthComputeShader(const ShaderMetaType::CompiledShaderInitializerType& Initializer)
+		: FGlobalShader(Initializer)
+	{
+		InputDepthTexture.Bind(Initializer.ParameterMap, TEXT("InputDepthTexture"));
+		OutputDepthTexture.Bind(Initializer.ParameterMap, TEXT("OutputDepthTexture"));
+	}
 
 	static bool ShouldCompilePermutation(const FGlobalShaderPermutationParameters& Parameters)
 	{
 		return IsFeatureLevelSupported(Parameters.Platform, ERHIFeatureLevel::SM5);
 	}
-};
-IMPLEMENT_SHADER_TYPE(, FSurfaceDepthVertexShader, TEXT("/Plugin/Caustic/SurfaceDepthVertexShader.usf"), TEXT("Main_VS"), SF_Vertex);
 
-class FSurfaceDepthPixelShader : public FGlobalShader
-{
-	DECLARE_GLOBAL_SHADER(FSurfaceDepthPixelShader);
-	SHADER_USE_PARAMETER_STRUCT(FSurfaceDepthPixelShader, FGlobalShader);
-
-	static bool ShouldCompilePermutation(const FGlobalShaderPermutationParameters& Parameters)
+	void BindShaderTextures(FRHICommandList& RHICmdList, FUnorderedAccessViewRHIRef OutputTextureUAV, FShaderResourceViewRHIRef InputTextureSRV)
 	{
-		return IsFeatureLevelSupported(Parameters.Platform, ERHIFeatureLevel::SM5);
-	}
-};
-IMPLEMENT_SHADER_TYPE(, FSurfaceDepthPixelShader, TEXT("/Plugin/Caustic/SurfaceDepthPixelShader.usf"), TEXT("Main_PS"), SF_Pixel);
+		FRHIComputeShader* ComputeShaderRHI = GetComputeShader();
 
-void FSurfaceDepthPassRenderer::Render(
-	ERHIFeatureLevel::Type        FeatureLevel,
-	FRHICommandListImmediate&     RHICmdList,
-	FVector2D                     RenderTargetSize,
-	const FMatrix&                View,
-	const FMatrix&                Projection,
-	TArray<UPrimitiveComponent*>& Components
-)
-{
-	check(IsInRenderingThread());
-
-	FRDGBuilder GraphBuilder(RHICmdList);
-
-	FSurfaceDepthVertexShader::FParameters* VertexParams = GraphBuilder.AllocParameters<FSurfaceDepthVertexShader::FParameters>();
-	{
-		// Init vertex shader params
-		VertexParams->View = View;
-		VertexParams->Projection = Projection;
-	}
-
-	// UPrimitiveComponent -> FPrimitiveSceneProxy -> MeshProcessor(?) -> MeshDrawCommand(?) -> RHICommandList
-
-	GraphBuilder.AddPass(RDG_EVENT_NAME("SurfaceDepthPass"), VertexParams, ERDGPassFlags::Raster,
-		[this](FRHICommandList& RHICmdList)
+		if (InputDepthTexture.IsBound())
 		{
+			RHICmdList.SetShaderResourceViewParameter(ComputeShaderRHI, InputDepthTexture.GetBaseIndex(), InputTextureSRV);
 		}
-	);
+
+		if (OutputDepthTexture.IsBound())
+		{
+			RHICmdList.SetUAVParameter(ComputeShaderRHI, OutputDepthTexture.GetBaseIndex(), OutputTextureUAV);
+		}
+	}
+
+	void SetShaderParameters(FRHICommandList& RHICmdList, const FSurfaceDepthComputeShaderParameters& Parameters)
+	{
+		FRHIComputeShader* ComputeShaderRHI = GetComputeShader();
+		SetUniformBufferParameterImmediate(RHICmdList, ComputeShaderRHI, GetUniformBufferParameter<FSurfaceDepthComputeShaderParameters>(), Parameters);
+
+	}
+
+private:
+
+	FShaderResourceParameter InputDepthTexture;
+	FShaderResourceParameter OutputDepthTexture;
+};
+IMPLEMENT_SHADER_TYPE(, FSurfaceDepthComputeShader, TEXT("/Plugin/Caustic/SurfaceDepthComputeShader.usf"), TEXT("ComputeSurfaceDepth"), SF_Compute);
+
+FSurfaceDepthPassRenderer::FSurfaceDepthPassRenderer() :
+	bInitiated(false)
+{
+
 }
+
+FSurfaceDepthPassRenderer::~FSurfaceDepthPassRenderer()
+{
+#define SafeReleaseTextureResource(Texture)  \
+	do {                                     \
+		if (Texture.IsValid()) {             \
+			Texture->Release();              \
+		}                                    \
+	} while(0);
+
+	SafeReleaseTextureResource(InputDepthTexture);
+	SafeReleaseTextureResource(InputDepthTextureSRV);
+	SafeReleaseTextureResource(OutputDepthTexture);
+	SafeReleaseTextureResource(OutputDepthTextureUAV);
+	SafeReleaseTextureResource(OutputDepthTextureSRV);
+}
+
+void FSurfaceDepthPassRenderer::InitPass(const FSurfaceDepthPassConfig& InConfig)
+{
+	if (!bInitiated)
+	{
+		FRHIResourceCreateInfo CreateInfo;
+		OutputDepthTexture = RHICreateTexture2D(InConfig.TextureWidth, InConfig.TextureHeight, PF_FloatRGBA, 1, 1, TexCreate_ShaderResource | TexCreate_UAV, CreateInfo);
+		OutputDepthTextureUAV = RHICreateUnorderedAccessView(OutputDepthTexture);
+		OutputDepthTextureSRV = RHICreateShaderResourceView(OutputDepthTexture, 0);
+		
+		InputDepthTexture = (FRHITexture2D*)(InConfig.DepthTextureRef->TextureReference.TextureReferenceRHI->GetReferencedTexture());
+		InputDepthTextureSRV = RHICreateShaderResourceView(InputDepthTexture, 0);
+
+		if (InConfig.DebugTextureRef)
+		{
+			DebugTextureRHIRef = InConfig.DebugTextureRef->TextureReference.TextureReferenceRHI->GetTextureReference()->GetReferencedTexture();
+		}
+
+		Config = InConfig;
+
+		bInitiated = true;
+	}
+}
+
+void FSurfaceDepthPassRenderer::Render(ERHIFeatureLevel::Type FeatureLevel)
+{
+	if (IsValidPass())
+	{
+		ENQUEUE_RENDER_COMMAND(SurfaceDepthPass)
+		(
+			[FeatureLevel, this](FRHICommandListImmediate& RHICmdList)
+			{
+				check(IsInRenderingThread());
+				checkf(FeatureLevel == ERHIFeatureLevel::SM5, TEXT("Only surpport SM5"));
+
+				// Bind shader textures
+				TShaderMapRef<FSurfaceDepthComputeShader> SurfaceDepthComputeShader(GetGlobalShaderMap(FeatureLevel));
+				RHICmdList.SetComputeShader(SurfaceDepthComputeShader->GetComputeShader());
+				SurfaceDepthComputeShader->BindShaderTextures(RHICmdList, OutputDepthTextureUAV, InputDepthTextureSRV);
+
+				// Bind shader uniform
+				FSurfaceDepthComputeShaderParameters UniformParam;
+				UniformParam.MinDepth = Config.MinDepth;
+				UniformParam.MaxDepth = Config.MaxDepth;
+				SurfaceDepthComputeShader->SetShaderParameters(RHICmdList, UniformParam);
+
+				// Dispatch shader
+				int ThreadGroupCountX = StaticCast<int>(Config.TextureWidth / 32);
+				int ThreadGroupCountY = StaticCast<int>(Config.TextureHeight / 32);
+
+				DispatchComputeShader(RHICmdList, *SurfaceDepthComputeShader, ThreadGroupCountX, ThreadGroupCountY, 1);
+
+				if (DebugTextureRHIRef)
+				{
+					RHICmdList.CopyToResolveTarget(OutputDepthTexture, DebugTextureRHIRef, FResolveParams());
+				}
+			}
+		);
+	}
+}
+
+bool FSurfaceDepthPassRenderer::IsValidPass() const
+{
+	bool bValid = !!InputDepthTexture;
+	bValid &= !!InputDepthTextureSRV;
+	bValid &= !!OutputDepthTexture;
+	bValid &= !!OutputDepthTextureUAV;
+	bValid &= !!OutputDepthTextureSRV;
+
+	return bValid;
+}
+

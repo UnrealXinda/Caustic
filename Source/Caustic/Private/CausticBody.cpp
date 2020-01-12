@@ -3,10 +3,13 @@
 
 #include "CausticBody.h"
 #include "Components/BoxComponent.h"
+#include "Components/SceneCaptureComponent2D.h"
 #include "ProceduralMeshComponent.h"
+#include "Kismet/KismetRenderingLibrary.h"
 
 // Sets default values
-ACausticBody::ACausticBody()
+ACausticBody::ACausticBody() :
+	SurfaceDepthPassRenderer(new FSurfaceDepthPassRenderer())
 {
  	// Set this actor to call Tick() every frame.  You can turn this off to improve performance if you don't need it.
 	PrimaryActorTick.bCanEverTick = true;
@@ -14,10 +17,12 @@ ACausticBody::ACausticBody()
 	BoxCollisionComp = CreateDefaultSubobject<UBoxComponent>(TEXT("BoxCollisionComponent"));
 	SurfaceMeshComp = CreateDefaultSubobject<UProceduralMeshComponent>(TEXT("SurfaceMeshComponent"));
 	BodyMeshComp = CreateDefaultSubobject<UProceduralMeshComponent>(TEXT("BodyMeshComponent"));
+	DepthCaptureComp = CreateDefaultSubobject<USceneCaptureComponent2D>(TEXT("DepthCaptureComponent"));
 
 	RootComponent = BoxCollisionComp;
 	SurfaceMeshComp->SetupAttachment(RootComponent);
 	BodyMeshComp->SetupAttachment(RootComponent);
+	DepthCaptureComp->SetupAttachment(RootComponent);
 
 	CellSize = 15.0f;
 	BodyWidth = 500.0f;
@@ -28,6 +33,16 @@ ACausticBody::ACausticBody()
 	BoxCollisionComp->SetCollisionResponseToAllChannels(ECR_Ignore);
 	BoxCollisionComp->SetCollisionResponseToChannel(ECC_WorldDynamic, ECR_Overlap);
 
+	DepthCaptureComp->RelativeRotation = FRotator(-90.0f, 0.0f, 270.0f);
+	DepthCaptureComp->ProjectionType = ECameraProjectionMode::Orthographic;
+	DepthCaptureComp->OrthoWidth = BodyWidth;
+	DepthCaptureComp->PostProcessBlendWeight = 0.0f;
+	DepthCaptureComp->bOverride_CustomNearClippingPlane = true;
+	DepthCaptureComp->CustomNearClippingPlane = 0.0f;
+	DepthCaptureComp->PrimitiveRenderMode = ESceneCapturePrimitiveRenderMode::PRM_RenderScenePrimitives;
+	DepthCaptureComp->CaptureSource = ESceneCaptureSource::SCS_SceneDepth;
+	DepthCaptureComp->MaxViewDistanceOverride = BodyDepth;
+
 	GenerateSurfaceMesh();
 	GenerateBodyMesh();
 }
@@ -36,23 +51,46 @@ ACausticBody::ACausticBody()
 void ACausticBody::BeginPlay()
 {
 	Super::BeginPlay();
+
+	uint32 TextureWidth = BodyWidth;
+	uint32 TextureHeight = BodyHeight;
+
+	DepthRenderTarget = UKismetRenderingLibrary::CreateRenderTarget2D(GetWorld(), BodyWidth, BodyHeight, RTF_R16f);
+	DepthCaptureComp->TextureTarget = DepthRenderTarget;
+
+	FSurfaceDepthPassConfig Config;
+	Config.MinDepth = 0.0f;
+	Config.MaxDepth = BodyDepth;
+	Config.TextureWidth = TextureWidth;
+	Config.TextureHeight = TextureHeight;
+	Config.DepthTextureRef = DepthRenderTarget;
+	Config.DebugTextureRef = SurfaceDepthPassDebugTexture;
+
+	SurfaceDepthPassRenderer->InitPass(Config);
 }
 
 void ACausticBody::GenerateSurfaceMesh()
 {
-	int32 SizeX = FMath::RoundToInt(BodyWidth / CellSize);
-	int32 SizeY = FMath::RoundToInt(BodyHeight / CellSize);
-	float CellWidth = BodyWidth / SizeX;
-	float CellHeight = BodyHeight / SizeY;
-	float CellU = 1.0f / SizeX;
-	float CellV = 1.0f / SizeY;
+	const int32 SizeX = FMath::RoundToInt(BodyWidth / CellSize);
+	const int32 SizeY = FMath::RoundToInt(BodyHeight / CellSize);
+	const float CellWidth = BodyWidth / SizeX;
+	const float CellHeight = BodyHeight / SizeY;
+	const float CellU = 1.0f / SizeX;
+	const float CellV = 1.0f / SizeY;
+	const int VertexCount = (SizeX + 1) * (SizeY + 1);
+	const int TriangleCount = SizeX * SizeY * 6;
 
-	SurfaceMeshComp->ClearAllMeshSections();
+	SurfaceMeshComp->ClearMeshSection(0);
 
 	TArray<FVector> Vertices;
 	TArray<FVector> Normals;
-	TArray<FVector2D> UV;
+	TArray<FVector2D> UVs;
 	TArray<int32> Triangles;
+
+	Vertices.Reserve(VertexCount);
+	Normals.Reserve(VertexCount);
+	UVs.Reserve(VertexCount);
+	Triangles.Reserve(TriangleCount);
 
 	for (int32 Y = 0; Y <= SizeY; ++Y)
 	{
@@ -67,7 +105,7 @@ void ACausticBody::GenerateSurfaceMesh()
 
 			Vertices.Add(FVector(LocX, LocY, LocZ));
 			Normals.Add(FVector::UpVector);
-			UV.Add(FVector2D(U, V));
+			UVs.Add(FVector2D(U, V));
 		}
 	}
 
@@ -77,23 +115,23 @@ void ACausticBody::GenerateSurfaceMesh()
 		{
 			int A = Y * (SizeX + 1) + X;
 			int B = A + SizeX + 1;
-			int C = B + 1;
+			int C = A + SizeX + 2;
 			int D = A + 1;
 
 			Triangles.Add(A);
-			Triangles.Add(B);
 			Triangles.Add(C);
+			Triangles.Add(B);
 
 			Triangles.Add(A);
-			Triangles.Add(C);
 			Triangles.Add(D);
+			Triangles.Add(C);
 		}
 	}
 
 	TArray<FLinearColor> EmptyVertexColor;
 	TArray<FProcMeshTangent> EmptyTangent;
 
-	SurfaceMeshComp->CreateMeshSection_LinearColor(0, Vertices, Triangles, Normals, UV, EmptyVertexColor, EmptyTangent, false);
+	SurfaceMeshComp->CreateMeshSection_LinearColor(0, Vertices, Triangles, Normals, UVs, EmptyVertexColor, EmptyTangent, false);
 }
 
 void ACausticBody::GenerateBodyMesh()
@@ -244,5 +282,6 @@ void ACausticBody::Tick(float DeltaTime)
 {
 	Super::Tick(DeltaTime);
 
+	SurfaceDepthPassRenderer->Render(ERHIFeatureLevel::SM5);
 }
 

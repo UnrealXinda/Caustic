@@ -1,30 +1,48 @@
 // Copyright 1998-2019 Epic Games, Inc. All Rights Reserved.
 
+#pragma once
+
 #include "CoreMinimal.h"
 #include "UObject/ObjectMacros.h"
 #include "RHI/Public/RHIResources.h"
 #include "RHI/Public/RHICommandList.h"
 
-struct FSurfaceDepthShaderParameters
+struct FSurfaceDepthPassConfig
 {
-	FMatrix Model;
-	FMatrix View;
-	FMatrix Projection;
-	float   MinDepth;  // Near surface clip
-	float   MaxDepth;  // Far surface clip
+	float                     MinDepth;
+	float                     MaxDepth;
+	uint32                    TextureWidth;
+	uint32                    TextureHeight;
+	UTextureRenderTarget2D*   DepthTextureRef;
+	UTextureRenderTarget2D*   DebugTextureRef;
 };
 
 class FSurfaceDepthPassRenderer
 {
 
-	void Render(
-		ERHIFeatureLevel::Type              FeatureLevel,
-		FRHICommandListImmediate&           RHICmdList,
-		FVector2D                           RenderTargetSize,
-		const FMatrix&                      View,
-		const FMatrix&                      Projection,
-		const float                         MinDepth,
+public:
+	
+	FSurfaceDepthPassRenderer();
+	~FSurfaceDepthPassRenderer();
 
-		TArray<class UPrimitiveComponent*>& Components
-	);
+	void InitPass(const FSurfaceDepthPassConfig& InConfig);
+
+	void Render(ERHIFeatureLevel::Type FeatureLevel);
+
+	bool IsValidPass() const;
+
+private:
+
+	FTexture2DRHIRef           OutputDepthTexture;
+	FUnorderedAccessViewRHIRef OutputDepthTextureUAV;
+	FShaderResourceViewRHIRef  OutputDepthTextureSRV;
+
+	FTexture2DRHIRef           InputDepthTexture;
+	FShaderResourceViewRHIRef  InputDepthTextureSRV;
+
+	FRHITexture*               DebugTextureRHIRef;
+
+	FSurfaceDepthPassConfig    Config;
+
+	bool                       bInitiated;
 };

@@ -44,6 +44,8 @@ public class Caustic : ModuleRules
 				"Engine",
 				"Slate",
 				"SlateCore",
+                "UnrealEd",
+                "Projects",
 				// ... add private dependencies that you statically link with here ...	
 			}
 			);
