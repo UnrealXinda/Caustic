@@ -13,7 +13,6 @@ struct FSurfaceDepthPassConfig
 	float                     MaxDepth;
 	uint32                    TextureWidth;
 	uint32                    TextureHeight;
-	UTextureRenderTarget2D*   DepthTextureRef;
 	UTextureRenderTarget2D*   DebugTextureRef;
 };
 
@@ -27,7 +26,7 @@ public:
 
 	void InitPass(const FSurfaceDepthPassConfig& InConfig);
 
-	void Render(ERHIFeatureLevel::Type FeatureLevel);
+	void Render(class FRHITexture* DepthTextureRef);
 
 	bool IsValidPass() const;
 

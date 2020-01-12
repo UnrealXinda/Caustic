@@ -10,7 +10,7 @@ void ComputeSurfaceDepth(uint3 ThreadId : SV_DispatchThreadID)
 {
     float MinDepth = SurfaceDepthUniform.MinDepth;
     float MaxDepth = SurfaceDepthUniform.MaxDepth;
-    float Depth = InputDepthTexture.Load(int3(ThreadId.xy, 0));
+    float Depth = clamp(InputDepthTexture.Load(int3(ThreadId.xy, 0)), MinDepth, MaxDepth);
     float NormalizedDepth = (Depth - MinDepth) / (MaxDepth - MinDepth);
     
     OutputDepthTexture[ThreadId.xy] = EncodeDepth(NormalizedDepth);

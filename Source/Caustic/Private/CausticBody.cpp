@@ -4,6 +4,7 @@
 #include "CausticBody.h"
 #include "Components/BoxComponent.h"
 #include "Components/SceneCaptureComponent2D.h"
+#include "Engine/TextureRenderTarget2D.h"
 #include "ProceduralMeshComponent.h"
 #include "Kismet/KismetRenderingLibrary.h"
 
@@ -25,9 +26,9 @@ ACausticBody::ACausticBody() :
 	DepthCaptureComp->SetupAttachment(RootComponent);
 
 	CellSize = 15.0f;
-	BodyWidth = 500.0f;
-	BodyHeight = 500.0f;
-	BodyDepth = 500.0f;
+	BodyWidth = 512.0f;
+	BodyHeight = 512.0f;
+	BodyDepth = 512.0f;
 
 	BoxCollisionComp->SetBoxExtent(FVector(BodyWidth, BodyHeight, BodyDepth));
 	BoxCollisionComp->SetCollisionResponseToAllChannels(ECR_Ignore);
@@ -63,7 +64,6 @@ void ACausticBody::BeginPlay()
 	Config.MaxDepth = BodyDepth;
 	Config.TextureWidth = TextureWidth;
 	Config.TextureHeight = TextureHeight;
-	Config.DepthTextureRef = DepthRenderTarget;
 	Config.DebugTextureRef = SurfaceDepthPassDebugTexture;
 
 	SurfaceDepthPassRenderer->InitPass(Config);
@@ -282,6 +282,7 @@ void ACausticBody::Tick(float DeltaTime)
 {
 	Super::Tick(DeltaTime);
 
-	SurfaceDepthPassRenderer->Render(ERHIFeatureLevel::SM5);
+	FRHITexture* DepthTextureRef = DepthRenderTarget->TextureReference.TextureReferenceRHI->GetTextureReference()->GetReferencedTexture();
+	SurfaceDepthPassRenderer->Render(DepthTextureRef);
 }
 

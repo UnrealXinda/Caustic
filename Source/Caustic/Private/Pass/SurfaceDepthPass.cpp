@@ -102,7 +102,7 @@ void FSurfaceDepthPassRenderer::InitPass(const FSurfaceDepthPassConfig& InConfig
 		OutputDepthTextureUAV = RHICreateUnorderedAccessView(OutputDepthTexture);
 		OutputDepthTextureSRV = RHICreateShaderResourceView(OutputDepthTexture, 0);
 		
-		InputDepthTexture = (FRHITexture2D*)(InConfig.DepthTextureRef->TextureReference.TextureReferenceRHI->GetReferencedTexture());
+		InputDepthTexture = RHICreateTexture2D(InConfig.TextureWidth, InConfig.TextureHeight, PF_R16F, 1, 1, TexCreate_ShaderResource, CreateInfo);
 		InputDepthTextureSRV = RHICreateShaderResourceView(InputDepthTexture, 0);
 
 		if (InConfig.DebugTextureRef)
@@ -116,19 +116,22 @@ void FSurfaceDepthPassRenderer::InitPass(const FSurfaceDepthPassConfig& InConfig
 	}
 }
 
-void FSurfaceDepthPassRenderer::Render(ERHIFeatureLevel::Type FeatureLevel)
+void FSurfaceDepthPassRenderer::Render(FRHITexture* DepthTextureRef)
 {
 	if (IsValidPass())
 	{
 		ENQUEUE_RENDER_COMMAND(SurfaceDepthPass)
 		(
-			[FeatureLevel, this](FRHICommandListImmediate& RHICmdList)
+			[DepthTextureRef, this](FRHICommandListImmediate& RHICmdList)
 			{
 				check(IsInRenderingThread());
-				checkf(FeatureLevel == ERHIFeatureLevel::SM5, TEXT("Only surpport SM5"));
+
+				// Copy depth texture
+				FRHICopyTextureInfo CopyInfo;
+				RHICmdList.CopyTexture(DepthTextureRef, InputDepthTexture, CopyInfo);
 
 				// Bind shader textures
-				TShaderMapRef<FSurfaceDepthComputeShader> SurfaceDepthComputeShader(GetGlobalShaderMap(FeatureLevel));
+				TShaderMapRef<FSurfaceDepthComputeShader> SurfaceDepthComputeShader(GetGlobalShaderMap(ERHIFeatureLevel::SM5));
 				RHICmdList.SetComputeShader(SurfaceDepthComputeShader->GetComputeShader());
 				SurfaceDepthComputeShader->BindShaderTextures(RHICmdList, OutputDepthTextureUAV, InputDepthTextureSRV);
 
