@@ -3,6 +3,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "CausticTypes.h"
 #include "UObject/ObjectMacros.h"
 #include "RHI/Public/RHIResources.h"
 #include "RHI/Public/RHICommandList.h"
@@ -13,7 +14,8 @@ struct FSurfaceDepthPassConfig
 	float                     MaxDepth;
 	uint32                    TextureWidth;
 	uint32                    TextureHeight;
-	UTextureRenderTarget2D*   DebugTextureRef;
+	UTextureRenderTarget2D*   DepthDebugTextureRef;
+	UTextureRenderTarget2D*   HeightDebugTextureRef;
 };
 
 class FSurfaceDepthPassRenderer
@@ -26,7 +28,7 @@ public:
 
 	void InitPass(const FSurfaceDepthPassConfig& InConfig);
 
-	void Render(class FRHITexture* DepthTextureRef);
+	void Render(const FLiquidParam& LiquidParam, class FRHITexture* DepthTextureRef);
 
 	bool IsValidPass() const;
 
@@ -36,12 +38,27 @@ private:
 	FUnorderedAccessViewRHIRef OutputDepthTextureUAV;
 	FShaderResourceViewRHIRef  OutputDepthTextureSRV;
 
+	FTexture2DRHIRef           OutputHeightTexture;
+	FUnorderedAccessViewRHIRef OutputHeightTextureUAV;
+	FShaderResourceViewRHIRef  OutputHeightTextureSRV;
+
 	FTexture2DRHIRef           InputDepthTexture;
 	FShaderResourceViewRHIRef  InputDepthTextureSRV;
 
-	FRHITexture*               DebugTextureRHIRef;
+	FTexture2DRHIRef           PrevDepthTexture;
+	FShaderResourceViewRHIRef  PrevDepthTextureSRV;
+
+	FRHITexture*               DepthDebugTextureRHIRef;
+	FRHITexture*               HeightDebugTextureRHIRef;
 
 	FSurfaceDepthPassConfig    Config;
 
 	bool                       bInitiated;
+
+private:
+
+	void RenderSurfaceDepthPass(FRHICommandListImmediate& RHICmdList, class FRHITexture* DepthTextureRef);
+	void RenderSurfaceHeightPass(FRHICommandListImmediate& RHICmdList, const FLiquidParam& LiquidParam);
+
+	FVector4 EncodeLiquidParam(const FLiquidParam& LiquidParam) const;
 };

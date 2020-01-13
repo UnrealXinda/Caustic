@@ -15,13 +15,36 @@
 #include "Public/Internationalization/Internationalization.h"
 #include "Public/StaticBoundShaderState.h"
 #include "RHI/Public/RHICommandList.h"
-#include "Components/PrimitiveComponent.h"
+
+namespace 
+{
+	inline FRHITexture* GetRHITextureFromRenderTarget(const UTextureRenderTarget2D* RenderTarget)
+	{
+		if (RenderTarget)
+		{
+			FTextureReferenceRHIRef OutputRenderTargetTextureRHI = RenderTarget->TextureReference.TextureReferenceRHI;
+
+			checkf(OutputRenderTargetTextureRHI, TEXT("Can't get render target %d texture"));
+
+			FRHITexture* RenderTargetTextureRef = OutputRenderTargetTextureRHI->GetTextureReference()->GetReferencedTexture();
+
+			return RenderTargetTextureRef;
+		}
+
+		return nullptr;
+	}
+}
 
 BEGIN_GLOBAL_SHADER_PARAMETER_STRUCT(FSurfaceDepthComputeShaderParameters, )
 	SHADER_PARAMETER(float, MinDepth)
 	SHADER_PARAMETER(float, MaxDepth)
 END_GLOBAL_SHADER_PARAMETER_STRUCT()
 IMPLEMENT_GLOBAL_SHADER_PARAMETER_STRUCT(FSurfaceDepthComputeShaderParameters, "SurfaceDepthUniform");
+
+BEGIN_GLOBAL_SHADER_PARAMETER_STRUCT(FSurfaceHeightComputeShaderParameters, )
+	SHADER_PARAMETER(FVector4, LiquidParam)
+END_GLOBAL_SHADER_PARAMETER_STRUCT()
+IMPLEMENT_GLOBAL_SHADER_PARAMETER_STRUCT(FSurfaceHeightComputeShaderParameters, "SurfaceHeightUniform");
 
 class FSurfaceDepthComputeShader : public FGlobalShader
 {
@@ -61,7 +84,6 @@ public:
 	{
 		FRHIComputeShader* ComputeShaderRHI = GetComputeShader();
 		SetUniformBufferParameterImmediate(RHICmdList, ComputeShaderRHI, GetUniformBufferParameter<FSurfaceDepthComputeShaderParameters>(), Parameters);
-
 	}
 
 private:
@@ -69,7 +91,67 @@ private:
 	FShaderResourceParameter InputDepthTexture;
 	FShaderResourceParameter OutputDepthTexture;
 };
+
+class FSurfaceHeightComputeShader : public FGlobalShader
+{
+	DECLARE_GLOBAL_SHADER(FSurfaceHeightComputeShader);
+
+public:
+
+	FSurfaceHeightComputeShader() {}
+	FSurfaceHeightComputeShader(const ShaderMetaType::CompiledShaderInitializerType& Initializer)
+		: FGlobalShader(Initializer)
+	{
+		DepthTexture.Bind(Initializer.ParameterMap, TEXT("DepthTexture"));
+		PrevDepthTexture.Bind(Initializer.ParameterMap, TEXT("PrevDepthTexture"));
+		OutputHeightTexture.Bind(Initializer.ParameterMap, TEXT("OutputHeightTexture"));
+	}
+
+	static bool ShouldCompilePermutation(const FGlobalShaderPermutationParameters& Parameters)
+	{
+		return IsFeatureLevelSupported(Parameters.Platform, ERHIFeatureLevel::SM5);
+	}
+
+	void BindShaderTextures(
+		FRHICommandList& RHICmdList,
+		FUnorderedAccessViewRHIRef OutputHeightTextureUAV,
+		FShaderResourceViewRHIRef DepthTextureSRV,
+		FShaderResourceViewRHIRef PrevDepthTextureSRV
+	)
+	{
+		FRHIComputeShader* ComputeShaderRHI = GetComputeShader();
+
+		if (DepthTexture.IsBound())
+		{
+			RHICmdList.SetShaderResourceViewParameter(ComputeShaderRHI, DepthTexture.GetBaseIndex(), DepthTextureSRV);
+		}
+
+		if (PrevDepthTexture.IsBound())
+		{
+			RHICmdList.SetShaderResourceViewParameter(ComputeShaderRHI, PrevDepthTexture.GetBaseIndex(), PrevDepthTextureSRV);
+		}
+
+		if (OutputHeightTexture.IsBound())
+		{
+			RHICmdList.SetUAVParameter(ComputeShaderRHI, OutputHeightTexture.GetBaseIndex(), OutputHeightTextureUAV);
+		}
+	}
+
+	void SetShaderParameters(FRHICommandList& RHICmdList, const FSurfaceHeightComputeShaderParameters& Parameters)
+	{
+		FRHIComputeShader* ComputeShaderRHI = GetComputeShader();
+		SetUniformBufferParameterImmediate(RHICmdList, ComputeShaderRHI, GetUniformBufferParameter<FSurfaceHeightComputeShaderParameters>(), Parameters);
+	}
+
+private:
+
+	FShaderResourceParameter DepthTexture;
+	FShaderResourceParameter PrevDepthTexture;
+	FShaderResourceParameter OutputHeightTexture;
+};
+
 IMPLEMENT_SHADER_TYPE(, FSurfaceDepthComputeShader, TEXT("/Plugin/Caustic/SurfaceDepthComputeShader.usf"), TEXT("ComputeSurfaceDepth"), SF_Compute);
+IMPLEMENT_SHADER_TYPE(, FSurfaceHeightComputeShader, TEXT("/Plugin/Caustic/SurfaceHeightComputeShader.usf"), TEXT("ComputeSurfaceHeight"), SF_Compute);
 
 FSurfaceDepthPassRenderer::FSurfaceDepthPassRenderer() :
 	bInitiated(false)
@@ -91,6 +173,11 @@ FSurfaceDepthPassRenderer::~FSurfaceDepthPassRenderer()
 	SafeReleaseTextureResource(OutputDepthTexture);
 	SafeReleaseTextureResource(OutputDepthTextureUAV);
 	SafeReleaseTextureResource(OutputDepthTextureSRV);
+	SafeReleaseTextureResource(OutputHeightTexture);
+	SafeReleaseTextureResource(OutputHeightTextureUAV);
+	SafeReleaseTextureResource(OutputHeightTextureSRV);
+	SafeReleaseTextureResource(PrevDepthTexture);
+	SafeReleaseTextureResource(PrevDepthTextureSRV);
 }
 
 void FSurfaceDepthPassRenderer::InitPass(const FSurfaceDepthPassConfig& InConfig)
@@ -101,14 +188,19 @@ void FSurfaceDepthPassRenderer::InitPass(const FSurfaceDepthPassConfig& InConfig
 		OutputDepthTexture = RHICreateTexture2D(InConfig.TextureWidth, InConfig.TextureHeight, PF_FloatRGBA, 1, 1, TexCreate_ShaderResource | TexCreate_UAV, CreateInfo);
 		OutputDepthTextureUAV = RHICreateUnorderedAccessView(OutputDepthTexture);
 		OutputDepthTextureSRV = RHICreateShaderResourceView(OutputDepthTexture, 0);
+
+		OutputHeightTexture = RHICreateTexture2D(InConfig.TextureWidth, InConfig.TextureHeight, PF_FloatRGBA, 1, 1, TexCreate_ShaderResource | TexCreate_UAV, CreateInfo);
+		OutputHeightTextureUAV = RHICreateUnorderedAccessView(OutputHeightTexture);
+		OutputHeightTextureSRV = RHICreateShaderResourceView(OutputHeightTexture, 0);
 		
 		InputDepthTexture = RHICreateTexture2D(InConfig.TextureWidth, InConfig.TextureHeight, PF_R16F, 1, 1, TexCreate_ShaderResource, CreateInfo);
 		InputDepthTextureSRV = RHICreateShaderResourceView(InputDepthTexture, 0);
 
-		if (InConfig.DebugTextureRef)
-		{
-			DebugTextureRHIRef = InConfig.DebugTextureRef->TextureReference.TextureReferenceRHI->GetTextureReference()->GetReferencedTexture();
-		}
+		PrevDepthTexture =  RHICreateTexture2D(InConfig.TextureWidth, InConfig.TextureHeight, PF_FloatRGBA, 1, 1, TexCreate_ShaderResource, CreateInfo);
+		PrevDepthTextureSRV = RHICreateShaderResourceView(PrevDepthTexture, 0);
+
+		DepthDebugTextureRHIRef = GetRHITextureFromRenderTarget(InConfig.DepthDebugTextureRef);
+		HeightDebugTextureRHIRef = GetRHITextureFromRenderTarget(InConfig.HeightDebugTextureRef);
 
 		Config = InConfig;
 
@@ -116,41 +208,18 @@ void FSurfaceDepthPassRenderer::InitPass(const FSurfaceDepthPassConfig& InConfig
 	}
 }
 
-void FSurfaceDepthPassRenderer::Render(FRHITexture* DepthTextureRef)
+void FSurfaceDepthPassRenderer::Render(const FLiquidParam& LiquidParam, FRHITexture* DepthTextureRef)
 {
 	if (IsValidPass())
 	{
 		ENQUEUE_RENDER_COMMAND(SurfaceDepthPass)
 		(
-			[DepthTextureRef, this](FRHICommandListImmediate& RHICmdList)
+			[LiquidParam, DepthTextureRef, this](FRHICommandListImmediate& RHICmdList)
 			{
 				check(IsInRenderingThread());
 
-				// Copy depth texture
-				FRHICopyTextureInfo CopyInfo;
-				RHICmdList.CopyTexture(DepthTextureRef, InputDepthTexture, CopyInfo);
-
-				// Bind shader textures
-				TShaderMapRef<FSurfaceDepthComputeShader> SurfaceDepthComputeShader(GetGlobalShaderMap(ERHIFeatureLevel::SM5));
-				RHICmdList.SetComputeShader(SurfaceDepthComputeShader->GetComputeShader());
-				SurfaceDepthComputeShader->BindShaderTextures(RHICmdList, OutputDepthTextureUAV, InputDepthTextureSRV);
-
-				// Bind shader uniform
-				FSurfaceDepthComputeShaderParameters UniformParam;
-				UniformParam.MinDepth = Config.MinDepth;
-				UniformParam.MaxDepth = Config.MaxDepth;
-				SurfaceDepthComputeShader->SetShaderParameters(RHICmdList, UniformParam);
-
-				// Dispatch shader
-				int ThreadGroupCountX = StaticCast<int>(Config.TextureWidth / 32);
-				int ThreadGroupCountY = StaticCast<int>(Config.TextureHeight / 32);
-
-				DispatchComputeShader(RHICmdList, *SurfaceDepthComputeShader, ThreadGroupCountX, ThreadGroupCountY, 1);
-
-				if (DebugTextureRHIRef)
-				{
-					RHICmdList.CopyToResolveTarget(OutputDepthTexture, DebugTextureRHIRef, FResolveParams());
-				}
+				RenderSurfaceDepthPass(RHICmdList, DepthTextureRef);
+				RenderSurfaceHeightPass(RHICmdList, LiquidParam);
 			}
 		);
 	}
@@ -163,7 +232,98 @@ bool FSurfaceDepthPassRenderer::IsValidPass() const
 	bValid &= !!OutputDepthTexture;
 	bValid &= !!OutputDepthTextureUAV;
 	bValid &= !!OutputDepthTextureSRV;
+	bValid &= !!OutputHeightTexture;
+	bValid &= !!OutputHeightTextureUAV;
+	bValid &= !!OutputHeightTextureSRV;
+	bValid &= !!PrevDepthTexture;
+	bValid &= !!PrevDepthTextureSRV;
 
 	return bValid;
+}
+
+void FSurfaceDepthPassRenderer::RenderSurfaceDepthPass(FRHICommandListImmediate& RHICmdList, FRHITexture* DepthTextureRef)
+{
+	// Copy depth texture
+	FRHICopyTextureInfo CopyInfo;
+	RHICmdList.CopyTexture(DepthTextureRef, InputDepthTexture, CopyInfo);
+
+	// Bind shader textures
+	TShaderMapRef<FSurfaceDepthComputeShader> SurfaceDepthComputeShader(GetGlobalShaderMap(ERHIFeatureLevel::SM5));
+	RHICmdList.SetComputeShader(SurfaceDepthComputeShader->GetComputeShader());
+	SurfaceDepthComputeShader->BindShaderTextures(RHICmdList, OutputDepthTextureUAV, InputDepthTextureSRV);
+
+	// Bind shader uniform
+	FSurfaceDepthComputeShaderParameters UniformParam;
+	UniformParam.MinDepth = Config.MinDepth;
+	UniformParam.MaxDepth = Config.MaxDepth;
+	SurfaceDepthComputeShader->SetShaderParameters(RHICmdList, UniformParam);
+
+	// Dispatch shader
+	const int ThreadGroupCountX = StaticCast<int>(Config.TextureWidth / 32);
+	const int ThreadGroupCountY = StaticCast<int>(Config.TextureHeight / 32);
+	DispatchComputeShader(RHICmdList, *SurfaceDepthComputeShader, ThreadGroupCountX, ThreadGroupCountY, 1);
+
+	// Debug drawing
+	if (DepthDebugTextureRHIRef)
+	{
+		RHICmdList.CopyToResolveTarget(OutputDepthTexture, DepthDebugTextureRHIRef, FResolveParams());
+	}
+}
+
+void FSurfaceDepthPassRenderer::RenderSurfaceHeightPass(FRHICommandListImmediate& RHICmdList, const FLiquidParam& LiquidParam)
+{
+	// Bind shader textures
+	TShaderMapRef<FSurfaceHeightComputeShader> SurfaceHeightComputeShader(GetGlobalShaderMap(ERHIFeatureLevel::SM5));
+	RHICmdList.SetComputeShader(SurfaceHeightComputeShader->GetComputeShader());
+	SurfaceHeightComputeShader->BindShaderTextures(RHICmdList, OutputHeightTextureUAV, OutputDepthTextureSRV, PrevDepthTextureSRV);
+
+	// Bind shader uniform
+	FSurfaceHeightComputeShaderParameters UniformParam;
+	UniformParam.LiquidParam = EncodeLiquidParam(LiquidParam);
+	SurfaceHeightComputeShader->SetShaderParameters(RHICmdList, UniformParam);
+
+	// Dispatch shader
+	const int ThreadGroupCountX = StaticCast<int>(Config.TextureWidth / 32);
+	const int ThreadGroupCountY = StaticCast<int>(Config.TextureHeight / 32);
+	DispatchComputeShader(RHICmdList, *SurfaceHeightComputeShader, ThreadGroupCountX, ThreadGroupCountY, 1);
+
+	// Copy to cache depth texture
+	FRHICopyTextureInfo CopyInfo;
+	RHICmdList.CopyTexture(OutputDepthTexture, PrevDepthTexture, CopyInfo);
+
+	// Debug drawing
+	if (HeightDebugTextureRHIRef)
+	{
+		RHICmdList.CopyToResolveTarget(OutputHeightTexture, HeightDebugTextureRHIRef, FResolveParams());
+	}
+}
+
+FVector4 FSurfaceDepthPassRenderer::EncodeLiquidParam(const FLiquidParam& LiquidParam) const
+{
+	const float SampleSpacing = 1.0f / LiquidParam.DepthTextureWidth;
+	const float FixedDeltaTime = 0.016f;
+	float Viscosity = FMath::Abs(LiquidParam.Viscosity);
+	float MaxVelocity = SampleSpacing / 2 * FixedDeltaTime * FMath::Sqrt(Viscosity * FixedDeltaTime + 2);
+	float Velocity = FMath::Abs(LiquidParam.Velocity) * MaxVelocity;
+	float ViscositySquared = Viscosity * Viscosity;
+	float VelocitySquared = Velocity * Velocity;
+	float DeltaSizeSquared = SampleSpacing * SampleSpacing;
+	float DeltaT = FMath::Sqrt(ViscositySquared + 32 * VelocitySquared / DeltaSizeSquared);
+	float DeltaTDensity = 8 * VelocitySquared / DeltaSizeSquared;
+	float MaxT1 = (Viscosity + DeltaT) / DeltaTDensity;
+	float MaxT2 = (Viscosity - DeltaT) / DeltaTDensity;
+
+	float MaxT = (MaxT2 > 0) ? FMath::Min(MaxT1, MaxT2) : MaxT1;
+	MaxT = FMath::Max(FixedDeltaTime, MaxT);
+
+	float Factor = VelocitySquared * FixedDeltaTime * FixedDeltaTime / DeltaSizeSquared;
+	float I = Viscosity * FixedDeltaTime - 2;
+	float J = Viscosity * FixedDeltaTime + 2;
+
+	float K1 = (4 - 8 * Factor) / J;
+	float K2 = I / J;
+	float K3 = 2 * Factor / J;
+
+	return FVector4(K1, K2, K3, SampleSpacing);
 }
 

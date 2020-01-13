@@ -1,0 +1,34 @@
+#include "/Engine/Private/Common.ush"
+#include "CausticCommon.ush"
+
+RWTexture2D<float4> OutputHeightTexture;
+Texture2D<float4> DepthTexture;
+Texture2D<float4> PrevDepthTexture;
+
+[numthreads(32, 32, 1)]
+void ComputeSurfaceHeight(uint3 ThreadId : SV_DispatchThreadID)
+{
+    const float AttenuationCoefficient = 0.96;
+    float4 LiquidParam = SurfaceHeightUniform.LiquidParam;
+    float CurrentHeight = LiquidParam.x * DecodeDepth(DepthTexture.Load(int3(ThreadId.xy, 0)));
+    float Width, Height;
+    DepthTexture.GetDimensions(Width, Height);
+    uint StepX = LiquidParam.w * Width;
+    uint StepY = LiquidParam.w * Height;    
+    
+    LiquidParam = float4(1.408064, -0.9970044, 0.1472351, 0.0078125);
+    StepX = 2;
+    StepY = 2;
+    
+    float DeltaHeight = LiquidParam.z *
+    (DecodeDepth(DepthTexture.Load(int3(ThreadId.xy + uint2(StepX, 0), 0))) +
+     DecodeDepth(DepthTexture.Load(int3(ThreadId.xy - uint2(StepX, 0), 0))) +
+     DecodeDepth(DepthTexture.Load(int3(ThreadId.xy + uint2(0, StepY), 0))) +
+     DecodeDepth(DepthTexture.Load(int3(ThreadId.xy - uint2(0, StepY), 0))));
+    float PreviousHeight = LiquidParam.y * DecodeDepth(PrevDepthTexture.Load(int3(ThreadId.xy, 0)));
+    
+    CurrentHeight += DeltaHeight + PreviousHeight;
+    CurrentHeight *= AttenuationCoefficient;
+    
+    OutputHeightTexture[ThreadId.xy] = EncodeDepth(CurrentHeight);
+}

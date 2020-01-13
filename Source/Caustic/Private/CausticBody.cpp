@@ -44,6 +44,12 @@ ACausticBody::ACausticBody() :
 	DepthCaptureComp->CaptureSource = ESceneCaptureSource::SCS_SceneDepth;
 	DepthCaptureComp->MaxViewDistanceOverride = BodyDepth;
 
+	LiquidParam.DepthTextureWidth = 128;
+	LiquidParam.DepthTextureHeight = 128;
+	LiquidParam.Viscosity = 0.15f;
+	LiquidParam.Velocity = 0.5426512f;
+	LiquidParam.ForceFactor = 1.49f;
+
 	GenerateSurfaceMesh();
 	GenerateBodyMesh();
 }
@@ -53,10 +59,10 @@ void ACausticBody::BeginPlay()
 {
 	Super::BeginPlay();
 
-	uint32 TextureWidth = BodyWidth;
-	uint32 TextureHeight = BodyHeight;
+	uint32 TextureWidth = LiquidParam.DepthTextureWidth;
+	uint32 TextureHeight = LiquidParam.DepthTextureHeight;
 
-	DepthRenderTarget = UKismetRenderingLibrary::CreateRenderTarget2D(GetWorld(), BodyWidth, BodyHeight, RTF_R16f);
+	DepthRenderTarget = UKismetRenderingLibrary::CreateRenderTarget2D(GetWorld(), TextureWidth, TextureHeight, RTF_R16f);
 	DepthCaptureComp->TextureTarget = DepthRenderTarget;
 
 	FSurfaceDepthPassConfig Config;
@@ -64,7 +70,8 @@ void ACausticBody::BeginPlay()
 	Config.MaxDepth = BodyDepth;
 	Config.TextureWidth = TextureWidth;
 	Config.TextureHeight = TextureHeight;
-	Config.DebugTextureRef = SurfaceDepthPassDebugTexture;
+	Config.DepthDebugTextureRef = SurfaceDepthPassDebugTexture;
+	Config.HeightDebugTextureRef = SurfaceHeightPassDebugTexture;
 
 	SurfaceDepthPassRenderer->InitPass(Config);
 }
@@ -283,6 +290,6 @@ void ACausticBody::Tick(float DeltaTime)
 	Super::Tick(DeltaTime);
 
 	FRHITexture* DepthTextureRef = DepthRenderTarget->TextureReference.TextureReferenceRHI->GetTextureReference()->GetReferencedTexture();
-	SurfaceDepthPassRenderer->Render(DepthTextureRef);
+	SurfaceDepthPassRenderer->Render(LiquidParam, DepthTextureRef);
 }
 

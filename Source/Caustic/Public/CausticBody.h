@@ -3,6 +3,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "CausticTypes.h"
 #include "GameFramework/Actor.h"
 #include "Pass/SurfaceDepthPass.h"
 #include "CausticBody.generated.h"
@@ -20,17 +21,20 @@ public:
 
 protected:	
 
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = Components, meta = (ClampMin = 0.01))
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Caustic Body", meta = (ClampMin = 0.01))
 	float CellSize;
 
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = Components, meta = (ClampMin = 0.0))
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Caustic Body", meta = (ClampMin = 0.0))
 	float BodyWidth;
 
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = Components, meta = (ClampMin = 0.0))
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Caustic Body", meta = (ClampMin = 0.0))
 	float BodyHeight;
 
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = Components, meta = (ClampMin = 0.0))
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Caustic Body", meta = (ClampMin = 0.0))
 	float BodyDepth;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Caustic Body")
+	FLiquidParam LiquidParam;
 
 	/** The water surface mesh component */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = Components)
@@ -50,6 +54,9 @@ protected:
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Pass Debug Textures")
 	class UTextureRenderTarget2D* SurfaceDepthPassDebugTexture;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Pass Debug Textures")
+	class UTextureRenderTarget2D* SurfaceHeightPassDebugTexture;
 
 	UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, Category = "Pass Debug Textures")
 	class UTextureRenderTarget2D* DepthRenderTarget;

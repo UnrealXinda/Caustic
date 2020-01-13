@@ -33,3 +33,8 @@ float DecodeDepth(float4 RGBA)
     
     return max(D1, D2);
 }
+
+float step(float X, float Y)
+{
+    return (Y >= X) ? 1 : 0;
+}
