@@ -19,6 +19,9 @@ struct CAUSTIC_API FLiquidParam
 	UPROPERTY(EditAnywhere, BlueprintReadWrite)
 	float ForceFactor;
 
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, meta = (ClampMin = 0.0, ClampMax = 1.0))
+	float AttenuationCoefficient;
+
 	UPROPERTY(EditAnywhere, BlueprintReadWrite)
 	int32 DepthTextureWidth;
 

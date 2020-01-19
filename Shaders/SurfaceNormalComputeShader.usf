@@ -1,17 +1,23 @@
 #include "/Engine/Private/Common.ush"
 #include "CausticCommon.ush"
 
-RWTexture2D<float4> OutputDepthTexture;
-Texture2D<float> InputDepthTexture;
+RWTexture2D<float4> OutputNormalTexture;
+Texture2D<float4> InputHeightTexture;
 
-// Encodes a single float depth texture to full float4 RGBA texture to perserve precision
 [numthreads(32, 32, 1)]
-void ComputeSurfaceDepth(uint3 ThreadId : SV_DispatchThreadID)
+void ComputeSurfaceNormal(uint3 ThreadId : SV_DispatchThreadID)
 {
-    float MinDepth = SurfaceDepthUniform.MinDepth;
-    float MaxDepth = SurfaceDepthUniform.MaxDepth;
-    float Depth = clamp(InputDepthTexture.Load(int3(ThreadId.xy, 0)), MinDepth, MaxDepth);
-    float NormalizedDepth = (Depth - MinDepth) / (MaxDepth - MinDepth) * step(Depth, MaxDepth);
+    const float StepX = 1;
+    const float StepY = 1;
+    float Width, Height;
+    OutputNormalTexture.GetDimensions(Width, Height);
     
-    OutputDepthTexture[ThreadId.xy] = EncodeDepth(NormalizedDepth);
+    float LeftHeight   = DecodeDepth(InputHeightTexture.Load(int3(ThreadId.xy - uint2(StepX, 0), 0)));
+    float RightHeight  = DecodeDepth(InputHeightTexture.Load(int3(ThreadId.xy + uint2(StepX, 0), 0)));
+    float BottomHeight = DecodeDepth(InputHeightTexture.Load(int3(ThreadId.xy - uint2(0, StepY), 0)));
+    float TopHeight    = DecodeDepth(InputHeightTexture.Load(int3(ThreadId.xy + uint2(0, StepY), 0)));
+    
+    float3 Normal = normalize(float3(LeftHeight - RightHeight, BottomHeight - TopHeight, 1.0 / Width));
+
+    OutputNormalTexture[ThreadId.xy] = float4(Normal * 0.5 + 0.5, 1.0);
 }

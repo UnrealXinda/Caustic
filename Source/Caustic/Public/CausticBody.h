@@ -5,7 +5,9 @@
 #include "CoreMinimal.h"
 #include "CausticTypes.h"
 #include "GameFramework/Actor.h"
+#include "Components/PrimitiveComponent.h"
 #include "Pass/SurfaceDepthPass.h"
+#include "Pass/SurfaceNormalPass.h"
 #include "CausticBody.generated.h"
 
 UCLASS()
@@ -58,10 +60,15 @@ protected:
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Pass Debug Textures")
 	class UTextureRenderTarget2D* SurfaceHeightPassDebugTexture;
 
-	UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, Category = "Pass Debug Textures")
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Pass Debug Textures")
+	class UTextureRenderTarget2D* SurfaceNormalPassDebugTexture;
+
 	class UTextureRenderTarget2D* DepthRenderTarget;
 
 	TUniquePtr<FSurfaceDepthPassRenderer> SurfaceDepthPassRenderer;
+	TUniquePtr<FSurfaceNormalPassRenderer> SurfaceNormalPassRenderer;
+
+	TArray<TWeakObjectPtr<UPrimitiveComponent>> ComponentsToDrawDepth;
 
 protected:
 
@@ -71,6 +78,20 @@ protected:
 	UFUNCTION(BlueprintCallable)
 	void GenerateBodyMesh();
 
+	UFUNCTION()
+	void OnBoxBeginOverlap(
+		class UPrimitiveComponent* OverlappedComponent,
+		AActor*                    OtherActor,
+		class UPrimitiveComponent* OtherComp,
+		int32                      OtherBodyIndex,
+		bool                       bFromSweep,
+		const FHitResult&          SweepResult
+	);
+
+
 	// Called when the game starts or when spawned
 	virtual void BeginPlay() override;
+
+	virtual void PostInitializeComponents() override;
+
 };

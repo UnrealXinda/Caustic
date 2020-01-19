@@ -32,6 +32,12 @@ public:
 
 	bool IsValidPass() const;
 
+	FORCEINLINE FShaderResourceViewRHIRef GetDepthTextureSRV() const { return OutputDepthTextureSRV; }
+
+	FORCEINLINE FShaderResourceViewRHIRef GetHeightTextureSRV() const { return OutputHeightTextureSRV; }
+
+	FORCEINLINE FTexture2DRHIRef GetHeightTextureRef() const { return OutputHeightTexture; }
+
 private:
 
 	FTexture2DRHIRef           OutputDepthTexture;
@@ -57,7 +63,7 @@ private:
 
 private:
 
-	void RenderSurfaceDepthPass(FRHICommandListImmediate& RHICmdList, class FRHITexture* DepthTextureRef);
+	void RenderSurfaceDepthPass(FRHICommandListImmediate& RHICmdList, const FLiquidParam& LiquidParam, class FRHITexture* DepthTextureRef);
 	void RenderSurfaceHeightPass(FRHICommandListImmediate& RHICmdList, const FLiquidParam& LiquidParam);
 
 	FVector4 EncodeLiquidParam(const FLiquidParam& LiquidParam) const;

@@ -10,7 +10,8 @@
 
 // Sets default values
 ACausticBody::ACausticBody() :
-	SurfaceDepthPassRenderer(new FSurfaceDepthPassRenderer())
+	SurfaceDepthPassRenderer(new FSurfaceDepthPassRenderer()),
+	SurfaceNormalPassRenderer(new FSurfaceNormalPassRenderer())
 {
  	// Set this actor to call Tick() every frame.  You can turn this off to improve performance if you don't need it.
 	PrimaryActorTick.bCanEverTick = true;
@@ -25,16 +26,21 @@ ACausticBody::ACausticBody() :
 	BodyMeshComp->SetupAttachment(RootComponent);
 	DepthCaptureComp->SetupAttachment(RootComponent);
 
-	CellSize = 15.0f;
+	FVector Offset(0.0f, 0.0f, BodyDepth / 2);
+	SurfaceMeshComp->SetRelativeLocation(Offset);
+	BodyMeshComp->SetRelativeLocation(Offset);
+	DepthCaptureComp->SetRelativeLocation(Offset);
+
+	CellSize = 16.0f;
 	BodyWidth = 512.0f;
 	BodyHeight = 512.0f;
 	BodyDepth = 512.0f;
 
-	BoxCollisionComp->SetBoxExtent(FVector(BodyWidth, BodyHeight, BodyDepth));
+	BoxCollisionComp->SetBoxExtent(FVector(BodyWidth / 2, BodyHeight / 2, BodyDepth / 2));
 	BoxCollisionComp->SetCollisionResponseToAllChannels(ECR_Ignore);
 	BoxCollisionComp->SetCollisionResponseToChannel(ECC_WorldDynamic, ECR_Overlap);
 
-	DepthCaptureComp->RelativeRotation = FRotator(-90.0f, 0.0f, 270.0f);
+	DepthCaptureComp->SetRelativeRotation(FRotator(-90.0f, 0.0f, 270.0f));
 	DepthCaptureComp->ProjectionType = ECameraProjectionMode::Orthographic;
 	DepthCaptureComp->OrthoWidth = BodyWidth;
 	DepthCaptureComp->PostProcessBlendWeight = 0.0f;
@@ -42,13 +48,14 @@ ACausticBody::ACausticBody() :
 	DepthCaptureComp->CustomNearClippingPlane = 0.0f;
 	DepthCaptureComp->PrimitiveRenderMode = ESceneCapturePrimitiveRenderMode::PRM_RenderScenePrimitives;
 	DepthCaptureComp->CaptureSource = ESceneCaptureSource::SCS_SceneDepth;
-	DepthCaptureComp->MaxViewDistanceOverride = BodyDepth;
+	DepthCaptureComp->PrimitiveRenderMode = ESceneCapturePrimitiveRenderMode::PRM_UseShowOnlyList;
 
 	LiquidParam.DepthTextureWidth = 128;
 	LiquidParam.DepthTextureHeight = 128;
 	LiquidParam.Viscosity = 0.15f;
 	LiquidParam.Velocity = 0.5426512f;
 	LiquidParam.ForceFactor = 1.49f;
+	LiquidParam.AttenuationCoefficient = 0.96f;
 
 	GenerateSurfaceMesh();
 	GenerateBodyMesh();
@@ -65,15 +72,30 @@ void ACausticBody::BeginPlay()
 	DepthRenderTarget = UKismetRenderingLibrary::CreateRenderTarget2D(GetWorld(), TextureWidth, TextureHeight, RTF_R16f);
 	DepthCaptureComp->TextureTarget = DepthRenderTarget;
 
-	FSurfaceDepthPassConfig Config;
-	Config.MinDepth = 0.0f;
-	Config.MaxDepth = BodyDepth;
-	Config.TextureWidth = TextureWidth;
-	Config.TextureHeight = TextureHeight;
-	Config.DepthDebugTextureRef = SurfaceDepthPassDebugTexture;
-	Config.HeightDebugTextureRef = SurfaceHeightPassDebugTexture;
+	{
+		FSurfaceDepthPassConfig Config;
+		Config.MinDepth = 0.0f;
+		Config.MaxDepth = BodyDepth;
+		Config.TextureWidth = TextureWidth;
+		Config.TextureHeight = TextureHeight;
+		Config.DepthDebugTextureRef = SurfaceDepthPassDebugTexture;
+		Config.HeightDebugTextureRef = SurfaceHeightPassDebugTexture;
+		SurfaceDepthPassRenderer->InitPass(Config);
+	}
 
-	SurfaceDepthPassRenderer->InitPass(Config);
+	{
+		FSurfaceNormalPassConfig Config;
+		Config.TextureWidth = TextureWidth;
+		Config.TextureHeight = TextureHeight;
+		Config.NormalDebugTextureRef = SurfaceNormalPassDebugTexture;
+		SurfaceNormalPassRenderer->InitPass(Config);
+	}
+}
+
+void ACausticBody::PostInitializeComponents()
+{
+	Super::PostInitializeComponents();
+	BoxCollisionComp->OnComponentBeginOverlap.AddDynamic(this, &ACausticBody::OnBoxBeginOverlap);
 }
 
 void ACausticBody::GenerateSurfaceMesh()
@@ -284,12 +306,38 @@ void ACausticBody::GenerateBodyMesh()
 	BodyMeshComp->CreateMeshSection_LinearColor(0, Vertices, Triangles, Normals, UVs, VertexColors, EmptyTangent, false);
 }
 
+void ACausticBody::OnBoxBeginOverlap(
+	UPrimitiveComponent* OverlappedComponent,
+	AActor*              OtherActor,
+	UPrimitiveComponent* OtherComp,
+	int32                OtherBodyIndex,
+	bool                 bFromSweep,
+	const FHitResult&    SweepResult)
+{
+	ComponentsToDrawDepth.AddUnique(OtherComp);
+}
+
 // Called every frame
 void ACausticBody::Tick(float DeltaTime)
 {
 	Super::Tick(DeltaTime);
 
+	// Set up components that need to be drawn
+	DepthCaptureComp->ClearShowOnlyComponents();
+	for (TWeakObjectPtr<UPrimitiveComponent> Comp : ComponentsToDrawDepth)
+	{
+		DepthCaptureComp->ShowOnlyComponent(Comp.Get());
+	}
+	ComponentsToDrawDepth.Reset();
+
+	// Render surface depth pass
 	FRHITexture* DepthTextureRef = DepthRenderTarget->TextureReference.TextureReferenceRHI->GetTextureReference()->GetReferencedTexture();
 	SurfaceDepthPassRenderer->Render(LiquidParam, DepthTextureRef);
+
+	// Render surface normal pass
+	//FShaderResourceViewRHIRef HeightTextureSRV = SurfaceDepthPassRenderer->GetHeightTextureSRV();
+	//SurfaceNormalPassRenderer->Render(HeightTextureSRV);
+	auto HeightTextureSRV = SurfaceDepthPassRenderer->GetHeightTextureRef();
+	SurfaceNormalPassRenderer->Render(HeightTextureSRV);	
 }
 
