@@ -53,14 +53,29 @@ public:
 	{
 		FRHIComputeShader* ComputeShaderRHI = GetComputeShader();
 
+		if (OutputDepthTexture.IsBound())
+		{
+			RHICmdList.SetUAVParameter(ComputeShaderRHI, OutputDepthTexture.GetBaseIndex(), OutputTextureUAV);
+		}
+
 		if (InputDepthTexture.IsBound())
 		{
 			RHICmdList.SetShaderResourceViewParameter(ComputeShaderRHI, InputDepthTexture.GetBaseIndex(), InputTextureSRV);
 		}
+	}
+
+	void UnbindShaderTextures(FRHICommandList& RHICmdList)
+	{
+		FRHIComputeShader* ComputeShaderRHI = GetComputeShader();
 
 		if (OutputDepthTexture.IsBound())
 		{
-			RHICmdList.SetUAVParameter(ComputeShaderRHI, OutputDepthTexture.GetBaseIndex(), OutputTextureUAV);
+			RHICmdList.SetUAVParameter(ComputeShaderRHI, OutputDepthTexture.GetBaseIndex(), FUnorderedAccessViewRHIRef());
+		}
+
+		if (InputDepthTexture.IsBound())
+		{
+			RHICmdList.SetShaderResourceViewParameter(ComputeShaderRHI, InputDepthTexture.GetBaseIndex(), FShaderResourceViewRHIRef());
 		}
 	}
 
@@ -118,6 +133,26 @@ public:
 		if (PrevDepthTexture.IsBound())
 		{
 			RHICmdList.SetShaderResourceViewParameter(ComputeShaderRHI, PrevDepthTexture.GetBaseIndex(), PrevDepthTextureSRV);
+		}
+	}
+
+	void UnbindShaderTextures(FRHICommandList& RHICmdList)
+	{
+		FRHIComputeShader* ComputeShaderRHI = GetComputeShader();
+
+		if (OutputHeightTexture.IsBound())
+		{
+			RHICmdList.SetUAVParameter(ComputeShaderRHI, OutputHeightTexture.GetBaseIndex(), FUnorderedAccessViewRHIRef());
+		}
+
+		if (CurDepthTexture.IsBound())
+		{
+			RHICmdList.SetShaderResourceViewParameter(ComputeShaderRHI, CurDepthTexture.GetBaseIndex(), FShaderResourceViewRHIRef());
+		}
+
+		if (PrevDepthTexture.IsBound())
+		{
+			RHICmdList.SetShaderResourceViewParameter(ComputeShaderRHI, PrevDepthTexture.GetBaseIndex(), FShaderResourceViewRHIRef());
 		}
 	}
 
@@ -192,7 +227,7 @@ void FSurfaceDepthPassRenderer::Render(const FLiquidParam& LiquidParam, FRHIText
 {
 	if (IsValidPass())
 	{
-		ENQUEUE_RENDER_COMMAND(SurfaceDepthPass)
+		ENQUEUE_RENDER_COMMAND(SurfaceDepthPassCommand)
 		(
 			[&LiquidParam, DepthTextureRef, this](FRHICommandListImmediate& RHICmdList)
 			{
@@ -244,6 +279,9 @@ void FSurfaceDepthPassRenderer::RenderSurfaceDepthPass(FRHICommandListImmediate&
 	const int ThreadGroupCountY = StaticCast<int>(Config.TextureHeight / 32);
 	DispatchComputeShader(RHICmdList, *SurfaceDepthComputeShader, ThreadGroupCountX, ThreadGroupCountY, 1);
 
+	// Unbind shader textures
+	SurfaceDepthComputeShader->UnbindShaderTextures(RHICmdList);
+
 	// Debug drawing
 	if (DepthDebugTextureRHIRef)
 	{
@@ -268,6 +306,9 @@ void FSurfaceDepthPassRenderer::RenderSurfaceHeightPass(FRHICommandListImmediate
 	const int ThreadGroupCountX = StaticCast<int>(Config.TextureWidth / 32);
 	const int ThreadGroupCountY = StaticCast<int>(Config.TextureHeight / 32);
 	DispatchComputeShader(RHICmdList, *SurfaceHeightComputeShader, ThreadGroupCountX, ThreadGroupCountY, 1);
+
+	// Unbind shader textures
+	SurfaceHeightComputeShader->UnbindShaderTextures(RHICmdList);
 
 	// Copy to cache depth texture
 	FRHICopyTextureInfo CopyInfo;

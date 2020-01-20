@@ -8,6 +8,7 @@
 #include "Components/PrimitiveComponent.h"
 #include "Pass/SurfaceDepthPass.h"
 #include "Pass/SurfaceNormalPass.h"
+#include "Pass/SurfaceCausticPass.h"
 #include "CausticBody.generated.h"
 
 UCLASS()
@@ -63,10 +64,14 @@ protected:
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Pass Debug Textures")
 	class UTextureRenderTarget2D* SurfaceNormalPassDebugTexture;
 
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Pass Debug Textures")
+	class UTextureRenderTarget2D* SurfaceCausticPassDebugTexture;
+
 	class UTextureRenderTarget2D* DepthRenderTarget;
 
 	TUniquePtr<FSurfaceDepthPassRenderer> SurfaceDepthPassRenderer;
 	TUniquePtr<FSurfaceNormalPassRenderer> SurfaceNormalPassRenderer;
+	TUniquePtr<FSurfaceCausticPassRenderer> SurfaceCausticPassRenderer;
 
 	TArray<TWeakObjectPtr<UPrimitiveComponent>> ComponentsToDrawDepth;
 

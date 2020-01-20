@@ -40,14 +40,28 @@ public:
 	{
 		FRHIComputeShader* ComputeShaderRHI = GetComputeShader();
 
+		if (OutputNormalTexture.IsBound())
+		{
+			RHICmdList.SetUAVParameter(ComputeShaderRHI, OutputNormalTexture.GetBaseIndex(), OutputTextureUAV);
+		}
+
 		if (InputHeightTexture.IsBound())
 		{
 			RHICmdList.SetShaderResourceViewParameter(ComputeShaderRHI, InputHeightTexture.GetBaseIndex(), InputTextureSRV);
 		}
+	}
 
+	void UnbindShaderTextures(FRHICommandList& RHICmdList)
+	{
+		FRHIComputeShader* ComputeShaderRHI = GetComputeShader();
+
+		if (InputHeightTexture.IsBound())
+		{
+			RHICmdList.SetShaderResourceViewParameter(ComputeShaderRHI, InputHeightTexture.GetBaseIndex(), FShaderResourceViewRHIRef());
+		}
 		if (OutputNormalTexture.IsBound())
 		{
-			RHICmdList.SetUAVParameter(ComputeShaderRHI, OutputNormalTexture.GetBaseIndex(), OutputTextureUAV);
+			RHICmdList.SetUAVParameter(ComputeShaderRHI, OutputNormalTexture.GetBaseIndex(), FUnorderedAccessViewRHIRef());
 		}
 	}
 
@@ -84,9 +98,6 @@ void FSurfaceNormalPassRenderer::InitPass(const FSurfaceNormalPassConfig& InConf
 		OutputNormalTextureUAV = RHICreateUnorderedAccessView(OutputNormalTexture);
 		OutputNormalTextureSRV = RHICreateShaderResourceView(OutputNormalTexture, 0);
 
-		InputHeightTexture = RHICreateTexture2D(TextureWidth, TextureHeight, PF_FloatRGBA, 1, 1, TexCreate_ShaderResource, CreateInfo);
-		InputHeightTextureSRV = RHICreateShaderResourceView(InputHeightTexture, 0);
-
 		NormalDebugTextureRHIRef = Caustic::GetRHITextureFromRenderTarget(InConfig.NormalDebugTextureRef);
 
 		Config = InConfig;
@@ -95,30 +106,28 @@ void FSurfaceNormalPassRenderer::InitPass(const FSurfaceNormalPassConfig& InConf
 	}
 }
 
-//void FSurfaceNormalPassRenderer::Render(FShaderResourceViewRHIRef HeightTextureSRV)
-void FSurfaceNormalPassRenderer::Render(FTexture2DRHIRef HeightTextureRef)
+void FSurfaceNormalPassRenderer::Render(FShaderResourceViewRHIRef HeightTextureSRV)
 {
 	if (IsValidPass())
 	{
-		ENQUEUE_RENDER_COMMAND(SurfaceNormalPass)
+		ENQUEUE_RENDER_COMMAND(SurfaceNormalPassCommand)
 		(
-			[HeightTextureRef, this](FRHICommandListImmediate& RHICmdList)
+			[HeightTextureSRV, this](FRHICommandListImmediate& RHICmdList)
 			{
 				check(IsInRenderingThread());
 
-				// Copy height texture
-				FRHICopyTextureInfo CopyInfo;
-				RHICmdList.CopyTexture(HeightTextureRef, InputHeightTexture, CopyInfo);
-
 				// Bind shader textures
-				TShaderMapRef<FSurfaceNormalComputeShader> SurfacsNormalComputeShader(GetGlobalShaderMap(ERHIFeatureLevel::SM5));
-				RHICmdList.SetComputeShader(SurfacsNormalComputeShader->GetComputeShader());
-				SurfacsNormalComputeShader->BindShaderTextures(RHICmdList, OutputNormalTextureUAV, InputHeightTextureSRV);
+				TShaderMapRef<FSurfaceNormalComputeShader> SurfaceNormalComputeShader(GetGlobalShaderMap(ERHIFeatureLevel::SM5));
+				RHICmdList.SetComputeShader(SurfaceNormalComputeShader->GetComputeShader());
+				SurfaceNormalComputeShader->BindShaderTextures(RHICmdList, OutputNormalTextureUAV, HeightTextureSRV);
 
 				// Dispatch shader
 				const int ThreadGroupCountX = StaticCast<int>(Config.TextureWidth / 32);
 				const int ThreadGroupCountY = StaticCast<int>(Config.TextureHeight / 32);
-				DispatchComputeShader(RHICmdList, *SurfacsNormalComputeShader, ThreadGroupCountX, ThreadGroupCountY, 1);
+				DispatchComputeShader(RHICmdList, *SurfaceNormalComputeShader, ThreadGroupCountX, ThreadGroupCountY, 1);
+
+				// Unbind shader textures
+				SurfaceNormalComputeShader->UnbindShaderTextures(RHICmdList);
 
 				// Debug drawing
 				if (NormalDebugTextureRHIRef)
@@ -133,6 +142,7 @@ void FSurfaceNormalPassRenderer::Render(FTexture2DRHIRef HeightTextureRef)
 bool FSurfaceNormalPassRenderer::IsValidPass() const
 {
 	bool bValid = !!OutputNormalTexture;
+	bValid &= !!OutputNormalTextureUAV;
 	bValid &= !!OutputNormalTextureSRV;
 
 	return bValid;

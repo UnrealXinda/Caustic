@@ -24,19 +24,17 @@ public:
 
 	void InitPass(const FSurfaceNormalPassConfig& InConfig);
 
-	//void Render(FShaderResourceViewRHIRef HeightTextureSRV);
-	void Render(FTexture2DRHIRef HeightTextureRef);
+	void Render(FShaderResourceViewRHIRef HeightTextureSRV);
 
 	bool IsValidPass() const;
+
+	FORCEINLINE FShaderResourceViewRHIRef GetNormalTextureSRV() const { return OutputNormalTextureSRV; }
 
 private:
 
 	FTexture2DRHIRef           OutputNormalTexture;
 	FUnorderedAccessViewRHIRef OutputNormalTextureUAV;
 	FShaderResourceViewRHIRef  OutputNormalTextureSRV;
-
-	FTexture2DRHIRef           InputHeightTexture;
-	FShaderResourceViewRHIRef  InputHeightTextureSRV;
 
 	FRHITexture*               NormalDebugTextureRHIRef;
 

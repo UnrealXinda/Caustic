@@ -11,7 +11,8 @@
 // Sets default values
 ACausticBody::ACausticBody() :
 	SurfaceDepthPassRenderer(new FSurfaceDepthPassRenderer()),
-	SurfaceNormalPassRenderer(new FSurfaceNormalPassRenderer())
+	SurfaceNormalPassRenderer(new FSurfaceNormalPassRenderer()),
+	SurfaceCausticPassRenderer(new FSurfaceCausticPassRenderer())
 {
  	// Set this actor to call Tick() every frame.  You can turn this off to improve performance if you don't need it.
 	PrimaryActorTick.bCanEverTick = true;
@@ -55,6 +56,7 @@ ACausticBody::ACausticBody() :
 	LiquidParam.Viscosity = 0.15f;
 	LiquidParam.Velocity = 0.5426512f;
 	LiquidParam.ForceFactor = 1.49f;
+	LiquidParam.Refraction = 1.1f;
 	LiquidParam.AttenuationCoefficient = 0.96f;
 
 	GenerateSurfaceMesh();
@@ -89,6 +91,13 @@ void ACausticBody::BeginPlay()
 		Config.TextureHeight = TextureHeight;
 		Config.NormalDebugTextureRef = SurfaceNormalPassDebugTexture;
 		SurfaceNormalPassRenderer->InitPass(Config);
+	}
+
+	{
+		FSurfaceCausticPassConfig Config;
+		Config.TextureWidth = TextureWidth * 4;
+		Config.TextureHeight = TextureHeight * 4;
+		SurfaceCausticPassRenderer->InitPass(Config);
 	}
 }
 
@@ -335,9 +344,11 @@ void ACausticBody::Tick(float DeltaTime)
 	SurfaceDepthPassRenderer->Render(LiquidParam, DepthTextureRef);
 
 	// Render surface normal pass
-	//FShaderResourceViewRHIRef HeightTextureSRV = SurfaceDepthPassRenderer->GetHeightTextureSRV();
-	//SurfaceNormalPassRenderer->Render(HeightTextureSRV);
-	auto HeightTextureSRV = SurfaceDepthPassRenderer->GetHeightTextureRef();
-	SurfaceNormalPassRenderer->Render(HeightTextureSRV);	
+	FShaderResourceViewRHIRef HeightTextureSRV = SurfaceDepthPassRenderer->GetHeightTextureSRV();
+	SurfaceNormalPassRenderer->Render(HeightTextureSRV);
+
+	// Render surface caustic pass
+	FShaderResourceViewRHIRef NormalTextureSRV = SurfaceNormalPassRenderer->GetNormalTextureSRV();
+	SurfaceCausticPassRenderer->Render(LiquidParam, HeightTextureSRV, SurfaceCausticPassDebugTexture);
 }
 

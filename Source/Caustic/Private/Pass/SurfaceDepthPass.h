@@ -36,8 +36,6 @@ public:
 
 	FORCEINLINE FShaderResourceViewRHIRef GetHeightTextureSRV() const { return OutputHeightTextureSRV; }
 
-	FORCEINLINE FTexture2DRHIRef GetHeightTextureRef() const { return OutputHeightTexture; }
-
 private:
 
 	FTexture2DRHIRef           OutputDepthTexture;
