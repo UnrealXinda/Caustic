@@ -11,7 +11,7 @@ void ComputeSurfaceNormal(uint3 ThreadId : SV_DispatchThreadID)
     const float StepY = 1;
     float Width, Height;
     OutputNormalTexture.GetDimensions(Width, Height);
-    
+     
     float LeftHeight   = DecodeDepth(InputHeightTexture.Load(int3(ThreadId.xy - uint2(StepX, 0), 0)));
     float RightHeight  = DecodeDepth(InputHeightTexture.Load(int3(ThreadId.xy + uint2(StepX, 0), 0)));
     float BottomHeight = DecodeDepth(InputHeightTexture.Load(int3(ThreadId.xy - uint2(0, StepY), 0)));

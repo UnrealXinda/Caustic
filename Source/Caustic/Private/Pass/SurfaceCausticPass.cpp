@@ -126,12 +126,24 @@ public:
 		FGlobalShader(Initializer)
 	{
 		InputNormalTexture.Bind(Initializer.ParameterMap, TEXT("InputNormalTexture"));
-		NormalMapSampler.Bind(Initializer.ParameterMap, TEXT("NormalMapSampler"));
+		NormalTextureSampler.Bind(Initializer.ParameterMap, TEXT("NormalTextureSampler"));
 	}
 
 	static bool ShouldCompilePermutation(const FGlobalShaderPermutationParameters& Parameters)
 	{
 		return IsFeatureLevelSupported(Parameters.Platform, ERHIFeatureLevel::SM5);
+	}
+
+	static bool ShouldCache(EShaderPlatform Platform)
+	{
+		return IsFeatureLevelSupported(Platform, ERHIFeatureLevel::SM5);
+	}
+
+	virtual bool Serialize(FArchive& Ar) override
+	{
+		bool bShaderHasOutdatedParameters = FGlobalShader::Serialize(Ar);
+		Ar << InputNormalTexture << NormalTextureSampler;
+		return bShaderHasOutdatedParameters;
 	}
 
 	void BindShaderTextures(FRHICommandList& RHICmdList, FShaderResourceViewRHIRef InputTextureSRV)
@@ -143,10 +155,10 @@ public:
 			RHICmdList.SetShaderResourceViewParameter(PixelShaderRHI, InputNormalTexture.GetBaseIndex(), InputTextureSRV);
 		}
 		
-		if (NormalMapSampler.IsBound())
+		if (NormalTextureSampler.IsBound())
 		{
 			FRHISamplerState* SamplerStateLinear = TStaticSamplerState<SF_Bilinear, AM_Clamp, AM_Clamp, AM_Clamp>::GetRHI();
-			RHICmdList.SetShaderSampler(PixelShaderRHI, NormalMapSampler.GetBaseIndex(), SamplerStateLinear);
+			RHICmdList.SetShaderSampler(PixelShaderRHI, NormalTextureSampler.GetBaseIndex(), SamplerStateLinear);
 		}
 	}
 
@@ -169,7 +181,7 @@ public:
 private:
 
 	FShaderResourceParameter InputNormalTexture;
-	FShaderResourceParameter NormalMapSampler;
+	FShaderResourceParameter NormalTextureSampler;
 };
 
 IMPLEMENT_SHADER_TYPE(, FSurfaceCausticVertexShader, TEXT("/Plugin/Caustic/SurfaceCausticShader.usf"), TEXT("MainVS"), SF_Vertex)

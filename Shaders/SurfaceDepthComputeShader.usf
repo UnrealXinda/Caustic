@@ -3,6 +3,7 @@
 
 RWTexture2D<float4> OutputDepthTexture;
 Texture2D<float> InputDepthTexture;
+SamplerState DepthPassSampler;
 
 // Encodes a single float depth texture to full float4 RGBA texture to perserve precision and to perserve negative values
 [numthreads(32, 32, 1)]
@@ -11,7 +12,10 @@ void ComputeSurfaceDepth(uint3 ThreadId : SV_DispatchThreadID)
     float MinDepth = SurfaceDepthUniform.MinDepth;
     float MaxDepth = SurfaceDepthUniform.MaxDepth;
     float ForceFactor = SurfaceDepthUniform.ForceFactor;
-    float Depth = InputDepthTexture.Load(int3(ThreadId.xy, 0));
+    float2 Size;
+    OutputDepthTexture.GetDimensions(Size.x, Size.y);
+   
+    float Depth = InputDepthTexture.SampleLevel(DepthPassSampler, ThreadId.xy / Size, 0);
     float Mask = step(Depth, MaxDepth);
     float NormalizedDepth = (Depth - MinDepth) / (MaxDepth - MinDepth) * Mask;
     

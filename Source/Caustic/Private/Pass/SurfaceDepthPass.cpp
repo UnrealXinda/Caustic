@@ -42,6 +42,7 @@ public:
 	{
 		InputDepthTexture.Bind(Initializer.ParameterMap, TEXT("InputDepthTexture"));
 		OutputDepthTexture.Bind(Initializer.ParameterMap, TEXT("OutputDepthTexture"));
+		DepthPassSampler.Bind(Initializer.ParameterMap, TEXT("DepthPassSampler"));
 	}
 
 	static bool ShouldCompilePermutation(const FGlobalShaderPermutationParameters& Parameters)
@@ -49,34 +50,34 @@ public:
 		return IsFeatureLevelSupported(Parameters.Platform, ERHIFeatureLevel::SM5);
 	}
 
+	static bool ShouldCache(EShaderPlatform Platform)
+	{
+		return IsFeatureLevelSupported(Platform, ERHIFeatureLevel::SM5);
+	}
+	
+	virtual bool Serialize(FArchive& Ar) override
+	{
+		bool bShaderHasOutdatedParameters = FGlobalShader::Serialize(Ar);
+		Ar << InputDepthTexture << OutputDepthTexture << DepthPassSampler;
+		return bShaderHasOutdatedParameters;
+	}
+
 	void BindShaderTextures(FRHICommandList& RHICmdList, FUnorderedAccessViewRHIRef OutputTextureUAV, FShaderResourceViewRHIRef InputTextureSRV)
 	{
 		FRHIComputeShader* ComputeShaderRHI = GetComputeShader();
+		FRHISamplerState* SamplerStateLinear = TStaticSamplerState<SF_Bilinear, AM_Clamp, AM_Clamp, AM_Clamp>::GetRHI();
 
-		if (OutputDepthTexture.IsBound())
-		{
-			RHICmdList.SetUAVParameter(ComputeShaderRHI, OutputDepthTexture.GetBaseIndex(), OutputTextureUAV);
-		}
-
-		if (InputDepthTexture.IsBound())
-		{
-			RHICmdList.SetShaderResourceViewParameter(ComputeShaderRHI, InputDepthTexture.GetBaseIndex(), InputTextureSRV);
-		}
+		SetUAVParameter(RHICmdList, ComputeShaderRHI, OutputDepthTexture, OutputTextureUAV);
+		SetSRVParameter(RHICmdList, ComputeShaderRHI, InputDepthTexture, InputTextureSRV);
+		SetSamplerParameter(RHICmdList, ComputeShaderRHI, DepthPassSampler, SamplerStateLinear);
 	}
 
 	void UnbindShaderTextures(FRHICommandList& RHICmdList)
 	{
 		FRHIComputeShader* ComputeShaderRHI = GetComputeShader();
 
-		if (OutputDepthTexture.IsBound())
-		{
-			RHICmdList.SetUAVParameter(ComputeShaderRHI, OutputDepthTexture.GetBaseIndex(), FUnorderedAccessViewRHIRef());
-		}
-
-		if (InputDepthTexture.IsBound())
-		{
-			RHICmdList.SetShaderResourceViewParameter(ComputeShaderRHI, InputDepthTexture.GetBaseIndex(), FShaderResourceViewRHIRef());
-		}
+		SetUAVParameter(RHICmdList, ComputeShaderRHI, OutputDepthTexture, FUnorderedAccessViewRHIRef());
+		SetSRVParameter(RHICmdList, ComputeShaderRHI, InputDepthTexture, FShaderResourceViewRHIRef());
 	}
 
 	void SetShaderParameters(FRHICommandList& RHICmdList, const FSurfaceDepthComputeShaderParameters& Parameters)
@@ -89,6 +90,7 @@ private:
 
 	FShaderResourceParameter InputDepthTexture;
 	FShaderResourceParameter OutputDepthTexture;
+	FShaderResourceParameter DepthPassSampler;
 };
 
 class FSurfaceHeightComputeShader : public FGlobalShader
@@ -104,11 +106,24 @@ public:
 		CurDepthTexture.Bind(Initializer.ParameterMap, TEXT("CurDepthTexture"));
 		PrevDepthTexture.Bind(Initializer.ParameterMap, TEXT("PrevDepthTexture"));
 		OutputHeightTexture.Bind(Initializer.ParameterMap, TEXT("OutputHeightTexture"));
+		HeightPassSampler.Bind(Initializer.ParameterMap, TEXT("HeightPassSampler"));
 	}
 
 	static bool ShouldCompilePermutation(const FGlobalShaderPermutationParameters& Parameters)
 	{
 		return IsFeatureLevelSupported(Parameters.Platform, ERHIFeatureLevel::SM5);
+	}
+	
+	static bool ShouldCache(EShaderPlatform Platform)
+	{
+		return IsFeatureLevelSupported(Platform, ERHIFeatureLevel::SM5);
+	}
+
+	virtual bool Serialize(FArchive& Ar) override
+	{
+		bool bShaderHasOutdatedParameters = FGlobalShader::Serialize(Ar);
+		Ar << OutputHeightTexture << CurDepthTexture << PrevDepthTexture << HeightPassSampler;
+		return bShaderHasOutdatedParameters;
 	}
 
 	void BindShaderTextures(
@@ -119,41 +134,21 @@ public:
 	)
 	{
 		FRHIComputeShader* ComputeShaderRHI = GetComputeShader();
+		FRHISamplerState* SamplerStateLinear = TStaticSamplerState<SF_Bilinear, AM_Clamp, AM_Clamp, AM_Clamp>::GetRHI();
 
-		if (OutputHeightTexture.IsBound())
-		{
-			RHICmdList.SetUAVParameter(ComputeShaderRHI, OutputHeightTexture.GetBaseIndex(), OutputHeightTextureUAV);
-		}
-
-		if (CurDepthTexture.IsBound())
-		{
-			RHICmdList.SetShaderResourceViewParameter(ComputeShaderRHI, CurDepthTexture.GetBaseIndex(), CurDepthTextureSRV);
-		}
-
-		if (PrevDepthTexture.IsBound())
-		{
-			RHICmdList.SetShaderResourceViewParameter(ComputeShaderRHI, PrevDepthTexture.GetBaseIndex(), PrevDepthTextureSRV);
-		}
+		SetUAVParameter(RHICmdList, ComputeShaderRHI, OutputHeightTexture, OutputHeightTextureUAV);
+		SetSRVParameter(RHICmdList, ComputeShaderRHI, CurDepthTexture, CurDepthTextureSRV);
+		SetSRVParameter(RHICmdList, ComputeShaderRHI, PrevDepthTexture, PrevDepthTextureSRV);
+		SetSamplerParameter(RHICmdList, ComputeShaderRHI, HeightPassSampler, SamplerStateLinear);
 	}
 
 	void UnbindShaderTextures(FRHICommandList& RHICmdList)
 	{
 		FRHIComputeShader* ComputeShaderRHI = GetComputeShader();
 
-		if (OutputHeightTexture.IsBound())
-		{
-			RHICmdList.SetUAVParameter(ComputeShaderRHI, OutputHeightTexture.GetBaseIndex(), FUnorderedAccessViewRHIRef());
-		}
-
-		if (CurDepthTexture.IsBound())
-		{
-			RHICmdList.SetShaderResourceViewParameter(ComputeShaderRHI, CurDepthTexture.GetBaseIndex(), FShaderResourceViewRHIRef());
-		}
-
-		if (PrevDepthTexture.IsBound())
-		{
-			RHICmdList.SetShaderResourceViewParameter(ComputeShaderRHI, PrevDepthTexture.GetBaseIndex(), FShaderResourceViewRHIRef());
-		}
+		SetUAVParameter(RHICmdList, ComputeShaderRHI, OutputHeightTexture, FUnorderedAccessViewRHIRef());
+		SetSRVParameter(RHICmdList, ComputeShaderRHI, CurDepthTexture, FShaderResourceViewRHIRef());
+		SetSRVParameter(RHICmdList, ComputeShaderRHI, PrevDepthTexture, FShaderResourceViewRHIRef());
 	}
 
 	void SetShaderParameters(FRHICommandList& RHICmdList, const FSurfaceHeightComputeShaderParameters& Parameters)
@@ -167,6 +162,7 @@ private:
 	FShaderResourceParameter CurDepthTexture;
 	FShaderResourceParameter PrevDepthTexture;
 	FShaderResourceParameter OutputHeightTexture;
+	FShaderResourceParameter HeightPassSampler;
 };
 
 IMPLEMENT_SHADER_TYPE(, FSurfaceDepthComputeShader, TEXT("/Plugin/Caustic/SurfaceDepthComputeShader.usf"), TEXT("ComputeSurfaceDepth"), SF_Compute);

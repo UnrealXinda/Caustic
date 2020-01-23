@@ -2,7 +2,7 @@
 #include "CausticCommon.ush"
 
 Texture2D<float4> InputNormalTexture;
-SamplerState NormalMapSampler;
+SamplerState NormalTextureSampler;
 
 void MainVS(
     float4 InPosition : ATTRIBUTE0,
@@ -22,7 +22,7 @@ void MainPS(
 {
     float Refraction = SurfaceCausticUniform.Refraction;
     Refraction = 1.1;
-    float3 Normal = InputNormalTexture.Sample(NormalMapSampler, UV).rgb;
+    float3 Normal = InputNormalTexture.Sample(NormalTextureSampler, UV).rgb;
     float2 OldPos = UV;
     float2 NewPos = UV + Normal.xy * Refraction;
     
@@ -30,8 +30,5 @@ void MainPS(
     float NewArea = length(ddx(NewPos)) * length(ddy(NewPos));
     float Ratio = (OldArea / NewArea) * 0.5;
     
-    //Ratio = clamp(Ratio, 0.2, 1.0);
-    
     OutColor = float4(Ratio, Ratio, Ratio, 1.0);
-
 }
