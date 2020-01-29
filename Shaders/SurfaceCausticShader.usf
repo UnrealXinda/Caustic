@@ -2,37 +2,45 @@
 #include "CausticCommon.ush"
 
 Texture2D<float4> InputNormalTexture;
-SamplerState NormalTextureSampler;
+SamplerState CausticPassSampler;
 
 void MainVS(
     float4 InPosition : ATTRIBUTE0,
     float2 InUV : ATTRIBUTE1,
-    out float4 OutPosition : SV_Position,
+    out float2 OutUV : TEXCOORD0,
     out float2 OldPos : TEXCOORD1,
     out float2 NewPos : TEXCOORD2,
+    out float4 OutPosition : SV_Position
 )
 {    
-    float4x4 MVP = SurfaceCausticUniform.MVP;
     float Refraction = SurfaceCausticUniform.Refraction;
-
-    float3 Normal = InputNormalTexture.Sample(NormalTextureSampler, InUV).rgb;
-    float2 OldPos = InPosition.xy;
-    InPosition.xy += Normal.xy * Refraction;
-    float2 NewPos = InPosition.xy;
+    float2 Size;
+    InputNormalTexture.GetDimensions(Size.x, Size.y);
     
-    OutPosition = mul(InPosition, MVP);
+    // Invert V for UV
+    InUV.y = 1 - InUV.y;
+    
+    float3 Normal = InputNormalTexture.SampleLevel(CausticPassSampler, InUV, 1).rgb - 0.5;
+    
+    OldPos = InPosition.xy;
+    InPosition.xy += Normal.xy * Refraction;
+    NewPos = InPosition.xy;
+    
+    OutPosition = InPosition;
+    OutUV = InUV;
 }
 
 void MainPS(
-    in float4 Position: SV_Position,
+    in float2 InUV : TEXCOORD0,
     in float2 OldPos : TEXCOORD1,
     in float2 NewPos : TEXCOORD2,
+    in float4 Position : SV_Position,
     out float4 OutColor : SV_Target0
 )
 {
     float OldArea = length(ddx(OldPos)) * length(ddy(OldPos));
     float NewArea = length(ddx(NewPos)) * length(ddy(NewPos));
     float Ratio = (OldArea / NewArea) * 0.5;
-    
+
     OutColor = float4(Ratio, Ratio, Ratio, 1.0);
 }

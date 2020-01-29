@@ -29,7 +29,6 @@ public:
 	{
 		InputHeightTexture.Bind(Initializer.ParameterMap, TEXT("InputHeightTexture"));
 		OutputNormalTexture.Bind(Initializer.ParameterMap, TEXT("OutputNormalTexture"));
-		NormalPassSampler.Bind(Initializer.ParameterMap, TEXT("NormalPassSampler"));
 	}
 
 	static bool ShouldCompilePermutation(const FGlobalShaderPermutationParameters& Parameters)
@@ -52,11 +51,9 @@ public:
 	void BindShaderTextures(FRHICommandList& RHICmdList, FUnorderedAccessViewRHIRef OutputTextureUAV, FShaderResourceViewRHIRef InputTextureSRV)
 	{
 		FRHIComputeShader* ComputeShaderRHI = GetComputeShader();
-		FRHISamplerState* SamplerStateLinear = TStaticSamplerState<SF_Bilinear, AM_Clamp, AM_Clamp, AM_Clamp>::GetRHI();
 
 		SetUAVParameter(RHICmdList, ComputeShaderRHI, OutputNormalTexture, OutputTextureUAV);
 		SetSRVParameter(RHICmdList, ComputeShaderRHI, InputHeightTexture, InputTextureSRV);
-		SetSamplerParameter(RHICmdList, ComputeShaderRHI, NormalPassSampler, SamplerStateLinear);
 	}
 
 	void UnbindShaderTextures(FRHICommandList& RHICmdList)
@@ -71,7 +68,6 @@ private:
 
 	FShaderResourceParameter InputHeightTexture;
 	FShaderResourceParameter OutputNormalTexture;
-	FShaderResourceParameter NormalPassSampler;
 };
 
 IMPLEMENT_SHADER_TYPE(, FSurfaceNormalComputeShader, TEXT("/Plugin/Caustic/SurfaceNormalComputeShader.usf"), TEXT("ComputeSurfaceNormal"), SF_Compute);

@@ -3,18 +3,17 @@
 // Encoding/decoding [0..1) floats into 8 bit/channel RG. Note that 1.0 will not be encoded properly.
 float2 EncodeFloatRG(float Value)
 {
-    float2 kEncodeMul = float2(1.0, 255.0);
-    float kEncodeBit = 1.0 / 255.0;
+    const float2 kEncodeMul = float2(1.0, 255.0);
+    const float kEncodeBit = 1.0 / 255.0;
     
-    float2 Enc = kEncodeMul * Value;
-    Enc = frac(Enc);
+    float2 Enc = frac(kEncodeMul * Value);
     Enc.x -= Enc.y * kEncodeBit;
     return Enc;
 }
 
 float DecodeFloatRG(float2 Enc)
 {
-    float2 kDecodeDot = float2(1.0, 1 / 255.0);
+    const float2 kDecodeDot = float2(1.0, 1 / 255.0);
     return dot(Enc, kDecodeDot);
 }
 

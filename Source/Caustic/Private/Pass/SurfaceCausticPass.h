@@ -34,8 +34,4 @@ private:
 
 	FSurfaceCausticPassConfig         Config;
 	bool                              bInitiated;
-
-private:
-
-	FMatrix GetMVPMatrix() const;
 };

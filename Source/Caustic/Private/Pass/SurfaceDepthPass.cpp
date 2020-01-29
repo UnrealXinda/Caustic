@@ -42,7 +42,6 @@ public:
 	{
 		InputDepthTexture.Bind(Initializer.ParameterMap, TEXT("InputDepthTexture"));
 		OutputDepthTexture.Bind(Initializer.ParameterMap, TEXT("OutputDepthTexture"));
-		DepthPassSampler.Bind(Initializer.ParameterMap, TEXT("DepthPassSampler"));
 	}
 
 	static bool ShouldCompilePermutation(const FGlobalShaderPermutationParameters& Parameters)
@@ -58,18 +57,16 @@ public:
 	virtual bool Serialize(FArchive& Ar) override
 	{
 		bool bShaderHasOutdatedParameters = FGlobalShader::Serialize(Ar);
-		Ar << InputDepthTexture << OutputDepthTexture << DepthPassSampler;
+		Ar << InputDepthTexture << OutputDepthTexture;
 		return bShaderHasOutdatedParameters;
 	}
 
 	void BindShaderTextures(FRHICommandList& RHICmdList, FUnorderedAccessViewRHIRef OutputTextureUAV, FShaderResourceViewRHIRef InputTextureSRV)
 	{
 		FRHIComputeShader* ComputeShaderRHI = GetComputeShader();
-		FRHISamplerState* SamplerStateLinear = TStaticSamplerState<SF_Bilinear, AM_Clamp, AM_Clamp, AM_Clamp>::GetRHI();
 
 		SetUAVParameter(RHICmdList, ComputeShaderRHI, OutputDepthTexture, OutputTextureUAV);
 		SetSRVParameter(RHICmdList, ComputeShaderRHI, InputDepthTexture, InputTextureSRV);
-		SetSamplerParameter(RHICmdList, ComputeShaderRHI, DepthPassSampler, SamplerStateLinear);
 	}
 
 	void UnbindShaderTextures(FRHICommandList& RHICmdList)
@@ -90,7 +87,6 @@ private:
 
 	FShaderResourceParameter InputDepthTexture;
 	FShaderResourceParameter OutputDepthTexture;
-	FShaderResourceParameter DepthPassSampler;
 };
 
 class FSurfaceHeightComputeShader : public FGlobalShader
@@ -106,7 +102,6 @@ public:
 		CurDepthTexture.Bind(Initializer.ParameterMap, TEXT("CurDepthTexture"));
 		PrevDepthTexture.Bind(Initializer.ParameterMap, TEXT("PrevDepthTexture"));
 		OutputHeightTexture.Bind(Initializer.ParameterMap, TEXT("OutputHeightTexture"));
-		HeightPassSampler.Bind(Initializer.ParameterMap, TEXT("HeightPassSampler"));
 	}
 
 	static bool ShouldCompilePermutation(const FGlobalShaderPermutationParameters& Parameters)
@@ -122,7 +117,7 @@ public:
 	virtual bool Serialize(FArchive& Ar) override
 	{
 		bool bShaderHasOutdatedParameters = FGlobalShader::Serialize(Ar);
-		Ar << OutputHeightTexture << CurDepthTexture << PrevDepthTexture << HeightPassSampler;
+		Ar << OutputHeightTexture << CurDepthTexture << PrevDepthTexture;
 		return bShaderHasOutdatedParameters;
 	}
 
@@ -134,12 +129,10 @@ public:
 	)
 	{
 		FRHIComputeShader* ComputeShaderRHI = GetComputeShader();
-		FRHISamplerState* SamplerStateLinear = TStaticSamplerState<SF_Bilinear, AM_Clamp, AM_Clamp, AM_Clamp>::GetRHI();
 
 		SetUAVParameter(RHICmdList, ComputeShaderRHI, OutputHeightTexture, OutputHeightTextureUAV);
 		SetSRVParameter(RHICmdList, ComputeShaderRHI, CurDepthTexture, CurDepthTextureSRV);
 		SetSRVParameter(RHICmdList, ComputeShaderRHI, PrevDepthTexture, PrevDepthTextureSRV);
-		SetSamplerParameter(RHICmdList, ComputeShaderRHI, HeightPassSampler, SamplerStateLinear);
 	}
 
 	void UnbindShaderTextures(FRHICommandList& RHICmdList)
@@ -162,7 +155,6 @@ private:
 	FShaderResourceParameter CurDepthTexture;
 	FShaderResourceParameter PrevDepthTexture;
 	FShaderResourceParameter OutputHeightTexture;
-	FShaderResourceParameter HeightPassSampler;
 };
 
 IMPLEMENT_SHADER_TYPE(, FSurfaceDepthComputeShader, TEXT("/Plugin/Caustic/SurfaceDepthComputeShader.usf"), TEXT("ComputeSurfaceDepth"), SF_Compute);

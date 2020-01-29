@@ -56,8 +56,8 @@ ACausticBody::ACausticBody() :
 	LiquidParam.Viscosity = 0.15f;
 	LiquidParam.Velocity = 0.5426512f;
 	LiquidParam.ForceFactor = 1.49f;
-	LiquidParam.Refraction = 1.1f;
-	LiquidParam.AttenuationCoefficient = 0.96f;
+	LiquidParam.Refraction = 0.1f;
+	LiquidParam.AttenuationCoefficient = 0.97f;
 
 	GenerateSurfaceMesh();
 	GenerateBodyMesh();
@@ -97,7 +97,7 @@ void ACausticBody::BeginPlay()
 		FSurfaceCausticPassConfig Config;
 		Config.TextureWidth = TextureWidth * 4;
 		Config.TextureHeight = TextureHeight * 4;
-		Config.CellSize = CellSize / 4;
+		Config.CellSize = CellSize / 8;
 		Config.FarClipZ = BodyDepth;
 		Config.NearClipZ = -BodyDepth;
 		SurfaceCausticPassRenderer->InitPass(Config);
@@ -142,8 +142,8 @@ void ACausticBody::GenerateSurfaceMesh()
 			float LocY = -BodyHeight * 0.5f + X * CellHeight;
 			float LocZ = 0.0f;
 
-			float U = Y * CellU;
-			float V = X * CellV;
+			float U = X * CellU;
+			float V = Y * CellV;
 
 			Vertices.Add(FVector(LocX, LocY, LocZ));
 			Normals.Add(FVector::UpVector);
@@ -346,11 +346,11 @@ void ACausticBody::Tick(float DeltaTime)
 
 	// Set up components that need to be drawn
 	DepthCaptureComp->ClearShowOnlyComponents();
+
 	for (TWeakObjectPtr<UPrimitiveComponent> Comp : ComponentsToDrawDepth)
 	{
 		DepthCaptureComp->ShowOnlyComponent(Comp.Get());
 	}
-	//ComponentsToDrawDepth.Reset();
 
 	// Render surface depth pass
 	FRHITexture* DepthTextureRef = DepthRenderTarget->TextureReference.TextureReferenceRHI->GetTextureReference()->GetReferencedTexture();
@@ -362,6 +362,6 @@ void ACausticBody::Tick(float DeltaTime)
 
 	// Render surface caustic pass
 	FShaderResourceViewRHIRef NormalTextureSRV = SurfaceNormalPassRenderer->GetNormalTextureSRV();
-	SurfaceCausticPassRenderer->Render(LiquidParam, HeightTextureSRV, SurfaceCausticPassDebugTexture);
+	SurfaceCausticPassRenderer->Render(LiquidParam, NormalTextureSRV, SurfaceCausticPassDebugTexture);
 }
 
