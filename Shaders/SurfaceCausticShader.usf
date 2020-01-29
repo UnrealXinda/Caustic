@@ -7,25 +7,29 @@ SamplerState NormalTextureSampler;
 void MainVS(
     float4 InPosition : ATTRIBUTE0,
     float2 InUV : ATTRIBUTE1,
-    out float2 OutUV : TEXCOORD0,
-    out float4 OutPosition : SV_POSITION
+    out float4 OutPosition : SV_Position,
+    out float2 OldPos : TEXCOORD1,
+    out float2 NewPos : TEXCOORD2,
 )
-{
-    OutPosition = InPosition;
-    OutUV = InUV;
+{    
+    float4x4 MVP = SurfaceCausticUniform.MVP;
+    float Refraction = SurfaceCausticUniform.Refraction;
+
+    float3 Normal = InputNormalTexture.Sample(NormalTextureSampler, InUV).rgb;
+    float2 OldPos = InPosition.xy;
+    InPosition.xy += Normal.xy * Refraction;
+    float2 NewPos = InPosition.xy;
+    
+    OutPosition = mul(InPosition, MVP);
 }
 
 void MainPS(
-    in float2 UV : TEXCOORD0,
+    in float4 Position: SV_Position,
+    in float2 OldPos : TEXCOORD1,
+    in float2 NewPos : TEXCOORD2,
     out float4 OutColor : SV_Target0
 )
 {
-    float Refraction = SurfaceCausticUniform.Refraction;
-    Refraction = 1.1;
-    float3 Normal = InputNormalTexture.Sample(NormalTextureSampler, UV).rgb;
-    float2 OldPos = UV;
-    float2 NewPos = UV + Normal.xy * Refraction;
-    
     float OldArea = length(ddx(OldPos)) * length(ddy(OldPos));
     float NewArea = length(ddx(NewPos)) * length(ddy(NewPos));
     float Ratio = (OldArea / NewArea) * 0.5;

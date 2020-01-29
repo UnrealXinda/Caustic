@@ -17,7 +17,7 @@ void ComputeSurfaceNormal(uint3 ThreadId : SV_DispatchThreadID)
     float BottomHeight = DecodeDepth(InputHeightTexture.Load(int3(ThreadId.xy - uint2(0, StepY), 0)));
     float TopHeight    = DecodeDepth(InputHeightTexture.Load(int3(ThreadId.xy + uint2(0, StepY), 0)));
     
-    float3 Normal = normalize(float3(LeftHeight - RightHeight, BottomHeight - TopHeight, 1.0 / Width));
+    float3 Normal = normalize(float3(LeftHeight - RightHeight, BottomHeight - TopHeight, 5.0 / Width));
 
     OutputNormalTexture[ThreadId.xy] = float4(Normal * 0.5 + 0.5, 1.0);
 }

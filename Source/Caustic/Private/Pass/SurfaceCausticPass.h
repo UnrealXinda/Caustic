@@ -9,8 +9,11 @@
 
 struct FSurfaceCausticPassConfig
 {
-	uint32                    TextureWidth;
-	uint32                    TextureHeight;
+	uint32 TextureWidth;
+	uint32 TextureHeight;
+	uint32 CellSize;
+	float  FarClipZ;
+	float  NearClipZ;
 };
 
 class FSurfaceCausticPassRenderer
@@ -29,6 +32,10 @@ public:
 
 private:
 
-	FSurfaceCausticPassConfig  Config;
-	bool                       bInitiated;
+	FSurfaceCausticPassConfig         Config;
+	bool                              bInitiated;
+
+private:
+
+	FMatrix GetMVPMatrix() const;
 };

@@ -29,6 +29,7 @@ public:
 	{
 		InputHeightTexture.Bind(Initializer.ParameterMap, TEXT("InputHeightTexture"));
 		OutputNormalTexture.Bind(Initializer.ParameterMap, TEXT("OutputNormalTexture"));
+		NormalPassSampler.Bind(Initializer.ParameterMap, TEXT("NormalPassSampler"));
 	}
 
 	static bool ShouldCompilePermutation(const FGlobalShaderPermutationParameters& Parameters)
@@ -51,36 +52,26 @@ public:
 	void BindShaderTextures(FRHICommandList& RHICmdList, FUnorderedAccessViewRHIRef OutputTextureUAV, FShaderResourceViewRHIRef InputTextureSRV)
 	{
 		FRHIComputeShader* ComputeShaderRHI = GetComputeShader();
+		FRHISamplerState* SamplerStateLinear = TStaticSamplerState<SF_Bilinear, AM_Clamp, AM_Clamp, AM_Clamp>::GetRHI();
 
-		if (OutputNormalTexture.IsBound())
-		{
-			RHICmdList.SetUAVParameter(ComputeShaderRHI, OutputNormalTexture.GetBaseIndex(), OutputTextureUAV);
-		}
-
-		if (InputHeightTexture.IsBound())
-		{
-			RHICmdList.SetShaderResourceViewParameter(ComputeShaderRHI, InputHeightTexture.GetBaseIndex(), InputTextureSRV);
-		}
+		SetUAVParameter(RHICmdList, ComputeShaderRHI, OutputNormalTexture, OutputTextureUAV);
+		SetSRVParameter(RHICmdList, ComputeShaderRHI, InputHeightTexture, InputTextureSRV);
+		SetSamplerParameter(RHICmdList, ComputeShaderRHI, NormalPassSampler, SamplerStateLinear);
 	}
 
 	void UnbindShaderTextures(FRHICommandList& RHICmdList)
 	{
 		FRHIComputeShader* ComputeShaderRHI = GetComputeShader();
 
-		if (InputHeightTexture.IsBound())
-		{
-			RHICmdList.SetShaderResourceViewParameter(ComputeShaderRHI, InputHeightTexture.GetBaseIndex(), FShaderResourceViewRHIRef());
-		}
-		if (OutputNormalTexture.IsBound())
-		{
-			RHICmdList.SetUAVParameter(ComputeShaderRHI, OutputNormalTexture.GetBaseIndex(), FUnorderedAccessViewRHIRef());
-		}
+		SetUAVParameter(RHICmdList, ComputeShaderRHI, OutputNormalTexture, FUnorderedAccessViewRHIRef());
+		SetSRVParameter(RHICmdList, ComputeShaderRHI, InputHeightTexture, FShaderResourceViewRHIRef());
 	}
 
 private:
 
 	FShaderResourceParameter InputHeightTexture;
 	FShaderResourceParameter OutputNormalTexture;
+	FShaderResourceParameter NormalPassSampler;
 };
 
 IMPLEMENT_SHADER_TYPE(, FSurfaceNormalComputeShader, TEXT("/Plugin/Caustic/SurfaceNormalComputeShader.usf"), TEXT("ComputeSurfaceNormal"), SF_Compute);

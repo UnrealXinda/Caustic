@@ -52,6 +52,47 @@ class FSurfaceCausticSimpleVertexBuffer : public FVertexBuffer
 {
 public:
 
+	int32 VertexCount;
+
+	void Init(uint32 Width, uint32 Height, uint32 CellSize)
+	{
+		if (!bInitialized)
+		{
+			ReleaseRHI();
+
+			const int32 SizeX = FMath::RoundToInt(Width / CellSize);
+			const int32 SizeY = FMath::RoundToInt(Height / CellSize);
+			const float CellWidth = Width / SizeX;
+			const float CellHeight = Height / SizeY;
+			const float CellU = 1.0f / SizeX;
+			const float CellV = 1.0f / SizeY;
+			VertexCount = (SizeX + 1) * (SizeY + 1);
+
+			TResourceArray<FCausticSimpleVertex, VERTEXBUFFER_ALIGNMENT> Vertices;
+			Vertices.SetNumUninitialized(VertexCount);
+
+			for (int32 Y = 0; Y <= SizeY; ++Y)
+			{
+				for (int32 X = 0; X <= SizeX; ++X)
+				{
+					float LocX = -(float)(Width) * 0.5f + Y * CellWidth;
+					float LocY = -(float)(Height) * 0.5f + X * CellHeight;
+					float LocZ = 0.0f;
+
+					float U = Y * CellU;
+					float V = X * CellV;
+
+					Vertices.Add({ FVector4(LocX, LocY, LocZ, 1), FVector2D(U, V) });
+				}
+			}
+
+			FRHIResourceCreateInfo CreateInfo(&Vertices);
+			VertexBufferRHI = RHICreateVertexBuffer(Vertices.GetResourceDataSize(), BUF_Static, CreateInfo);
+		}
+
+		bInitialized = true;
+	}
+
 	void InitRHI() override
 	{
 		TResourceArray<FCausticSimpleVertex, VERTEXBUFFER_ALIGNMENT> Vertices;
@@ -69,28 +110,87 @@ public:
 		FRHIResourceCreateInfo CreateInfo(&Vertices);
 		VertexBufferRHI = RHICreateVertexBuffer(Vertices.GetResourceDataSize(), BUF_Static, CreateInfo);
 	}
+
+private:
+
+	bool bInitialized;
 };
 
 class FSurfaceCausticSimpleIndexBuffer : public FIndexBuffer
 {
 public:
 
+	int32 IndexCount;
+
+	void Init(uint32 Width, uint32 Height, uint32 CellSize)
+	{
+		if (!bInitialized)
+		{
+			ReleaseRHI();
+
+			const uint16 SizeX = FMath::RoundToInt(Width / CellSize);
+			const uint16 SizeY = FMath::RoundToInt(Height / CellSize);
+			const float CellWidth = Width / SizeX;
+			const float CellHeight = Height / SizeY;
+			const float CellU = 1.0f / SizeX;
+			const float CellV = 1.0f / SizeY;
+			IndexCount = SizeX * SizeY * 6;
+
+			TResourceArray<uint16, INDEXBUFFER_ALIGNMENT> Indices;
+			Indices.SetNumUninitialized(IndexCount);
+
+			for (uint16 Y = 0; Y < SizeY; ++Y)
+			{
+				for (uint16 X = 0; X < SizeX; ++X)
+				{
+					uint16 A = Y * (SizeX + 1) + X;
+					uint16 B = A + SizeX + 1;
+					uint16 C = A + SizeX + 2;
+					uint16 D = A + 1;
+
+					Indices.Add(A);
+					Indices.Add(C);
+					Indices.Add(B);
+
+					Indices.Add(A);
+					Indices.Add(D);
+					Indices.Add(C);
+				}
+			}
+
+			FRHIResourceCreateInfo CreateInfo(&Indices);
+			IndexBufferRHI = RHICreateIndexBuffer(sizeof(uint16), Indices.GetResourceDataSize(), BUF_Static, CreateInfo);
+		}
+
+		bInitialized = true;
+	}
+
 	void InitRHI() override
 	{
 		const uint16 Indices[] = { 0, 1, 2, 2, 1, 3, 0, 4, 5 };
 		TResourceArray<uint16, INDEXBUFFER_ALIGNMENT> IndexBuffer;
-		uint32 NumIndices = UE_ARRAY_COUNT(Indices);
-		IndexBuffer.AddUninitialized(NumIndices);
+		uint32 NumIndices = ARRAY_COUNT(Indices);
+		IndexBuffer.SetNumUninitialized(NumIndices);
 		FMemory::Memcpy(IndexBuffer.GetData(), Indices, NumIndices * sizeof(uint16));
 
 		// Create index buffer. Fill buffer with initial data upon creation
 		FRHIResourceCreateInfo CreateInfo(&IndexBuffer);
 		IndexBufferRHI = RHICreateIndexBuffer(sizeof(uint16), IndexBuffer.GetResourceDataSize(), BUF_Static, CreateInfo);
 	}
+
+private:
+
+	bool bInitialized;
 };
 
 TGlobalResource<FSurfaceCausticSimpleVertexBuffer> GSurfaceCausticVertexBuffer;
 TGlobalResource<FSurfaceCausticSimpleIndexBuffer> GSurfaceCausticIndexBuffer;
+
+BEGIN_GLOBAL_SHADER_PARAMETER_STRUCT(FSurfaceCausticVertexShaderParameters, )
+	SHADER_PARAMETER(FMatrix, MVP)
+	SHADER_PARAMETER(float, Refraction)
+END_GLOBAL_SHADER_PARAMETER_STRUCT()
+IMPLEMENT_GLOBAL_SHADER_PARAMETER_STRUCT(FSurfaceCausticVertexShaderParameters, "SurfaceCausticUniform");
 
 class FSurfaceCausticVertexShader : public FGlobalShader
 {
@@ -101,28 +201,6 @@ public:
 
 	FSurfaceCausticVertexShader() {}
 	FSurfaceCausticVertexShader(const ShaderMetaType::CompiledShaderInitializerType& Initializer) :
-		FGlobalShader(Initializer) {}
-
-	static bool ShouldCompilePermutation(const FGlobalShaderPermutationParameters& Parameters)
-	{
-		return IsFeatureLevelSupported(Parameters.Platform, ERHIFeatureLevel::SM5);
-	}
-};
-
-BEGIN_GLOBAL_SHADER_PARAMETER_STRUCT(FSurfaceCausticPixelShaderParameters, )
-	SHADER_PARAMETER(float, Refraction)
-END_GLOBAL_SHADER_PARAMETER_STRUCT()
-IMPLEMENT_GLOBAL_SHADER_PARAMETER_STRUCT(FSurfaceCausticPixelShaderParameters, "SurfaceCausticUniform");
-
-class FSurfaceCausticPixelShader : public FGlobalShader
-{
-
-	DECLARE_SHADER_TYPE(FSurfaceCausticPixelShader, Global);
-
-public:
-
-	FSurfaceCausticPixelShader() {}
-	FSurfaceCausticPixelShader(const ShaderMetaType::CompiledShaderInitializerType& Initializer) :
 		FGlobalShader(Initializer)
 	{
 		InputNormalTexture.Bind(Initializer.ParameterMap, TEXT("InputNormalTexture"));
@@ -132,11 +210,6 @@ public:
 	static bool ShouldCompilePermutation(const FGlobalShaderPermutationParameters& Parameters)
 	{
 		return IsFeatureLevelSupported(Parameters.Platform, ERHIFeatureLevel::SM5);
-	}
-
-	static bool ShouldCache(EShaderPlatform Platform)
-	{
-		return IsFeatureLevelSupported(Platform, ERHIFeatureLevel::SM5);
 	}
 
 	virtual bool Serialize(FArchive& Ar) override
@@ -149,39 +222,53 @@ public:
 	void BindShaderTextures(FRHICommandList& RHICmdList, FShaderResourceViewRHIRef InputTextureSRV)
 	{
 		FRHIPixelShader* PixelShaderRHI = GetPixelShader();
+		FRHISamplerState* SamplerStateLinear = TStaticSamplerState<SF_Bilinear, AM_Clamp, AM_Clamp, AM_Clamp>::GetRHI();
 
-		if (InputNormalTexture.IsBound())
-		{
-			RHICmdList.SetShaderResourceViewParameter(PixelShaderRHI, InputNormalTexture.GetBaseIndex(), InputTextureSRV);
-		}
-		
-		if (NormalTextureSampler.IsBound())
-		{
-			FRHISamplerState* SamplerStateLinear = TStaticSamplerState<SF_Bilinear, AM_Clamp, AM_Clamp, AM_Clamp>::GetRHI();
-			RHICmdList.SetShaderSampler(PixelShaderRHI, NormalTextureSampler.GetBaseIndex(), SamplerStateLinear);
-		}
+		SetSRVParameter(RHICmdList, PixelShaderRHI, InputNormalTexture, InputTextureSRV);
+		SetSamplerParameter(RHICmdList, PixelShaderRHI, NormalTextureSampler, SamplerStateLinear);
 	}
 
 	void UnbindShaderTextures(FRHICommandList& RHICmdList)
 	{
 		FRHIPixelShader* PixelShaderRHI = GetPixelShader();
 
-		if (InputNormalTexture.IsBound())
-		{
-			RHICmdList.SetShaderResourceViewParameter(PixelShaderRHI, InputNormalTexture.GetBaseIndex(), FShaderResourceViewRHIRef());
-		}
+		SetSRVParameter(RHICmdList, PixelShaderRHI, InputNormalTexture, FShaderResourceViewRHIRef());
 	}
 
-	void SetShaderParameters(FRHICommandList& RHICmdList, const FSurfaceCausticPixelShaderParameters& Parameters)
+	void SetShaderParameters(FRHICommandList& RHICmdList, const FSurfaceCausticVertexShaderParameters& Parameters)
 	{
 		FRHIComputeShader* ComputeShaderRHI = GetComputeShader();
-		SetUniformBufferParameterImmediate(RHICmdList, ComputeShaderRHI, GetUniformBufferParameter<FSurfaceCausticPixelShaderParameters>(), Parameters);
+		SetUniformBufferParameterImmediate(RHICmdList, ComputeShaderRHI, GetUniformBufferParameter<FSurfaceCausticVertexShaderParameters>(), Parameters);
 	}
 
 private:
 
 	FShaderResourceParameter InputNormalTexture;
 	FShaderResourceParameter NormalTextureSampler;
+};
+
+class FSurfaceCausticPixelShader : public FGlobalShader
+{
+
+	DECLARE_SHADER_TYPE(FSurfaceCausticPixelShader, Global);
+
+public:
+
+	FSurfaceCausticPixelShader() {}
+	FSurfaceCausticPixelShader(const ShaderMetaType::CompiledShaderInitializerType& Initializer) :
+		FGlobalShader(Initializer)
+	{
+	}
+
+	static bool ShouldCompilePermutation(const FGlobalShaderPermutationParameters& Parameters)
+	{
+		return IsFeatureLevelSupported(Parameters.Platform, ERHIFeatureLevel::SM5);
+	}
+
+	static bool ShouldCache(EShaderPlatform Platform)
+	{
+		return IsFeatureLevelSupported(Platform, ERHIFeatureLevel::SM5);
+	}
 };
 
 IMPLEMENT_SHADER_TYPE(, FSurfaceCausticVertexShader, TEXT("/Plugin/Caustic/SurfaceCausticShader.usf"), TEXT("MainVS"), SF_Vertex)
@@ -203,6 +290,9 @@ void FSurfaceCausticPassRenderer::InitPass(const FSurfaceCausticPassConfig& InCo
 	{
 		Config = InConfig;
 		bInitiated = true;
+
+		GSurfaceCausticVertexBuffer.Init(Config.TextureWidth, Config.TextureHeight, Config.CellSize);
+		GSurfaceCausticIndexBuffer.Init(Config.TextureWidth, Config.TextureHeight, Config.CellSize);
 	}
 }
 
@@ -261,12 +351,13 @@ void FSurfaceCausticPassRenderer::Render(const FLiquidParam& LiquidParam, FShade
 					);
 
 					// Bind shader textures
-					PixelShader->BindShaderTextures(RHICmdList, NormalTextureSRV);
+					VertexShader->BindShaderTextures(RHICmdList, NormalTextureSRV);
 
 					// Bind shader uniform
-					FSurfaceCausticPixelShaderParameters UniformParam;
+					FSurfaceCausticVertexShaderParameters UniformParam;
 					UniformParam.Refraction = LiquidParam.Refraction;
-					PixelShader->SetShaderParameters(RHICmdList, UniformParam);
+					UniformParam.MVP = GetMVPMatrix();
+					VertexShader->SetShaderParameters(RHICmdList, UniformParam);
 
 					// Dispatch pass
 					RHICmdList.SetStreamSource(0, GSurfaceCausticVertexBuffer.VertexBufferRHI, 0);
@@ -274,14 +365,14 @@ void FSurfaceCausticPassRenderer::Render(const FLiquidParam& LiquidParam, FShade
 						GSurfaceCausticIndexBuffer.IndexBufferRHI,
 						0, // BaseVertexIndex
 						0, // MinIndex
-						4, // NumBertices
+						GSurfaceCausticVertexBuffer.VertexCount, // NumVertices
 						0, // StartIndex
 						2, // NumPrimitives
 						1  // NumInstances
 					);
 
 					// Unbind shader textures
-					PixelShader->UnbindShaderTextures(RHICmdList);
+					VertexShader->UnbindShaderTextures(RHICmdList);
 				}
 
 				RHICmdList.EndRenderPass();
@@ -293,5 +384,22 @@ void FSurfaceCausticPassRenderer::Render(const FLiquidParam& LiquidParam, FShade
 bool FSurfaceCausticPassRenderer::IsValidPass() const
 {
 	return true;
+}
+
+FMatrix FSurfaceCausticPassRenderer::GetMVPMatrix() const
+{
+	const FVector EyeLoc = FVector::ZeroVector;
+	const FVector LookAt = FVector(0, 0, -1.0);
+	const FVector Up = FVector(1, 0, 0);
+
+	FMatrix ViewMatrix = FLookAtMatrix(EyeLoc, LookAt, Up);
+	FMatrix ProjectionMatrix = FMatrix(
+		FPlane((float)Config.TextureWidth, 0.f, 0.f, 0.f),
+		FPlane(0.f, (float)Config.TextureHeight, 0.f, 0.f),
+		FPlane(0.f, 0.f, (float)(Config.FarClipZ - Config.NearClipZ), 0.f),
+		FPlane(0.f, 0.f, 0.f, 1.f)
+	);
+
+	return ViewMatrix * ProjectionMatrix;
 }
 

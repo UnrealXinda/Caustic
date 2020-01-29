@@ -97,6 +97,9 @@ void ACausticBody::BeginPlay()
 		FSurfaceCausticPassConfig Config;
 		Config.TextureWidth = TextureWidth * 4;
 		Config.TextureHeight = TextureHeight * 4;
+		Config.CellSize = CellSize / 4;
+		Config.FarClipZ = BodyDepth;
+		Config.NearClipZ = -BodyDepth;
 		SurfaceCausticPassRenderer->InitPass(Config);
 	}
 }
@@ -105,6 +108,7 @@ void ACausticBody::PostInitializeComponents()
 {
 	Super::PostInitializeComponents();
 	BoxCollisionComp->OnComponentBeginOverlap.AddDynamic(this, &ACausticBody::OnBoxBeginOverlap);
+	BoxCollisionComp->OnComponentEndOverlap.AddDynamic(this, &ACausticBody::OnBoxEndOverlap);
 }
 
 void ACausticBody::GenerateSurfaceMesh()
@@ -326,6 +330,15 @@ void ACausticBody::OnBoxBeginOverlap(
 	ComponentsToDrawDepth.AddUnique(OtherComp);
 }
 
+void ACausticBody::OnBoxEndOverlap(
+	UPrimitiveComponent* OverlappedComponent,
+	AActor*              OtherActor,
+	UPrimitiveComponent* OtherComp,
+	int32                OtherBodyIndex)
+{
+	ComponentsToDrawDepth.RemoveSwap(OtherComp);
+}
+
 // Called every frame
 void ACausticBody::Tick(float DeltaTime)
 {
@@ -337,7 +350,7 @@ void ACausticBody::Tick(float DeltaTime)
 	{
 		DepthCaptureComp->ShowOnlyComponent(Comp.Get());
 	}
-	ComponentsToDrawDepth.Reset();
+	//ComponentsToDrawDepth.Reset();
 
 	// Render surface depth pass
 	FRHITexture* DepthTextureRef = DepthRenderTarget->TextureReference.TextureReferenceRHI->GetTextureReference()->GetReferencedTexture();

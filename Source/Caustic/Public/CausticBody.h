@@ -93,6 +93,13 @@ protected:
 		const FHitResult&          SweepResult
 	);
 
+	UFUNCTION()
+	void OnBoxEndOverlap(
+		class UPrimitiveComponent* OverlappedComponent,
+		AActor*                    OtherActor,
+		class UPrimitiveComponent* OtherComp,
+		int32                      OtherBodyIndex
+	);
 
 	// Called when the game starts or when spawned
 	virtual void BeginPlay() override;

@@ -20,18 +20,18 @@ float DecodeFloatRG(float2 Enc)
 
 float4 EncodeDepth(float Depth)
 {
-    float2 RG = EncodeFloatRG(max(Depth, 0));
-    float2 BA = EncodeFloatRG(max(-Depth, 0));
+    float2 RG = EncodeFloatRG(abs(Depth));
+    float B = step(0, Depth);
     
-    return float4(RG, BA);
+    return float4(RG, B, 1.0);
 }
 
 float DecodeDepth(float4 RGBA)
 {
-    float D1 = DecodeFloatRG(RGBA.rg);
-    float D2 = DecodeFloatRG(RGBA.ba);
+    float Depth = DecodeFloatRG(RGBA.rg);
+    float Sign = RGBA.b > 0.5 ? 1 : -1;
     
-    return max(D1, D2);
+    return Depth * Sign;
 }
 
 float step(float X, float Y)
