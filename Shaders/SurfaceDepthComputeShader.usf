@@ -17,6 +17,6 @@ void ComputeSurfaceDepth(uint3 ThreadId : SV_DispatchThreadID)
     if (MaxDepth >= Depth)
     {
         float NormalizedDepth = (Depth - MinDepth) / (MaxDepth - MinDepth);
-        OutputDepthTexture[ThreadId.xy] = EncodeDepth(NormalizedDepth);
+        OutputDepthTexture[ThreadId.xy] = EncodeDepth(NormalizedDepth * ForceFactor);
     }
 }

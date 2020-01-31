@@ -12,10 +12,10 @@ void ComputeSurfaceHeight(uint3 ThreadId : SV_DispatchThreadID)
     float AttenuationCoefficient = SurfaceHeightUniform.AttenuationCoefficient;
     float Width, Height;
     CurDepthTexture.GetDimensions(Width, Height);
-    uint StepX = LiquidParam.w * Width + 1;
-    uint StepY = LiquidParam.w * Height + 1;
+    uint StepX = LiquidParam.w * Width;
+    uint StepY = LiquidParam.w * Height;
     
-    float CurrentHeight = LiquidParam.x * DecodeDepth(CurDepthTexture.Load(int3(ThreadId.xy, 0)));
+    float CurrentHeight = LiquidParam.x * DecodeDepth(CurDepthTexture.Load(int3(ThreadId.xy, 0)));    
     float DeltaHeight = LiquidParam.z *
         (DecodeDepth(CurDepthTexture.Load(int3(ThreadId.xy + uint2(StepX, 0), 0))) +
          DecodeDepth(CurDepthTexture.Load(int3(ThreadId.xy - uint2(StepX, 0), 0))) +

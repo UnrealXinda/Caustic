@@ -170,10 +170,10 @@ void ACausticBody::GenerateSurfaceMesh()
 		}
 	}
 
-	TArray<FLinearColor> EmptyVertexColor;
+	TArray<FColor> EmptyVertexColor;
 	TArray<FProcMeshTangent> EmptyTangent;
 
-	SurfaceMeshComp->CreateMeshSection_LinearColor(0, Vertices, Triangles, Normals, UVs, EmptyVertexColor, EmptyTangent, false);
+	SurfaceMeshComp->CreateMeshSection(0, Vertices, Triangles, Normals, UVs, EmptyVertexColor, EmptyTangent, false);
 }
 
 void ACausticBody::GenerateBodyMesh()
@@ -186,8 +186,8 @@ void ACausticBody::GenerateBodyMesh()
 	const float CellV = 1.0f / SizeY;
 	const float HalfWidth = BodyWidth * 0.5f;
 	const float HalfHeight = BodyHeight * 0.5f;
-	const FLinearColor WhiteOneAlpha(1.0f, 1.0f, 1.0f, 1.0f);
-	const FLinearColor WhiteZeroAlpha(1.0f, 1.0f, 1.0f, 0.0f);
+	const FColor WhiteOneAlpha(1.0f, 1.0f, 1.0f, 1.0f);
+	const FColor WhiteZeroAlpha(1.0f, 1.0f, 1.0f, 0.0f);
 
 	const int32 VertexCount = 4 * (SizeX + SizeY + 2);
 	const int32 TriangleCount = 12 * (SizeX + SizeY);
@@ -197,7 +197,7 @@ void ACausticBody::GenerateBodyMesh()
 	TArray<FVector> Vertices;
 	TArray<FVector> Normals;
 	TArray<FVector2D> UVs;
-	TArray<FLinearColor> VertexColors;
+	TArray<FColor> VertexColors;
 	TArray<int32> Triangles;
 
 	Vertices.Reserve(VertexCount);
@@ -316,7 +316,7 @@ void ACausticBody::GenerateBodyMesh()
 
 	TArray<FProcMeshTangent> EmptyTangent;
 
-	BodyMeshComp->CreateMeshSection_LinearColor(0, Vertices, Triangles, Normals, UVs, VertexColors, EmptyTangent, false);
+	BodyMeshComp->CreateMeshSection(0, Vertices, Triangles, Normals, UVs, VertexColors, EmptyTangent, false);
 }
 
 void ACausticBody::OnBoxBeginOverlap(
