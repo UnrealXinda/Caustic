@@ -34,4 +34,7 @@ private:
 
 	FSurfaceCausticPassConfig         Config;
 	bool                              bInitiated;
+
+	TUniquePtr<class FSurfaceCausticSimpleVertexBuffer> SurfaceCausticVertexBuffer;
+	TUniquePtr<class FSurfaceCausticSimpleIndexBuffer>  SurfaceCausticIndexBuffer;
 };

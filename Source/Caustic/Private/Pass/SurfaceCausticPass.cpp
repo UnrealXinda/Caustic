@@ -165,9 +165,6 @@ public:
 	}
 };
 
-TGlobalResource<FSurfaceCausticSimpleVertexBuffer> GSurfaceCausticVertexBuffer;
-TGlobalResource<FSurfaceCausticSimpleIndexBuffer> GSurfaceCausticIndexBuffer;
-
 BEGIN_GLOBAL_SHADER_PARAMETER_STRUCT(FSurfaceCausticVertexShaderParameters, )
 	SHADER_PARAMETER(float, Refraction)
 END_GLOBAL_SHADER_PARAMETER_STRUCT()
@@ -255,7 +252,9 @@ IMPLEMENT_SHADER_TYPE(, FSurfaceCausticVertexShader, TEXT("/Plugin/Caustic/Surfa
 IMPLEMENT_SHADER_TYPE(, FSurfaceCausticPixelShader, TEXT("/Plugin/Caustic/SurfaceCausticShader.usf"), TEXT("MainPS"), SF_Pixel)
 
 FSurfaceCausticPassRenderer::FSurfaceCausticPassRenderer() :
-	bInitiated(false)
+	bInitiated(false),
+	SurfaceCausticVertexBuffer(new FSurfaceCausticSimpleVertexBuffer),
+	SurfaceCausticIndexBuffer(new FSurfaceCausticSimpleIndexBuffer)
 {
 
 }
@@ -271,8 +270,8 @@ void FSurfaceCausticPassRenderer::InitPass(const FSurfaceCausticPassConfig& InCo
 		Config = InConfig;
 		bInitiated = true;
 
-		GSurfaceCausticVertexBuffer.Init(Config.TextureWidth, Config.TextureHeight, Config.CellSize);
-		GSurfaceCausticIndexBuffer.Init(Config.TextureWidth, Config.TextureHeight, Config.CellSize);
+		SurfaceCausticVertexBuffer->Init(Config.TextureWidth, Config.TextureHeight, Config.CellSize);
+		SurfaceCausticIndexBuffer->Init(Config.TextureWidth, Config.TextureHeight, Config.CellSize);
 	}
 }
 
@@ -338,14 +337,14 @@ void FSurfaceCausticPassRenderer::Render(const FLiquidParam& LiquidParam, FShade
 					VertexShader->SetShaderParameters(RHICmdList, UniformParam);
 
 					// Dispatch pass
-					RHICmdList.SetStreamSource(0, GSurfaceCausticVertexBuffer.VertexBufferRHI, 0);
+					RHICmdList.SetStreamSource(0, SurfaceCausticVertexBuffer->VertexBufferRHI, 0);
 					RHICmdList.DrawIndexedPrimitive(
-						GSurfaceCausticIndexBuffer.IndexBufferRHI,
+						SurfaceCausticIndexBuffer->IndexBufferRHI,
 						0, // BaseVertexIndex
 						0, // MinIndex
-						GSurfaceCausticVertexBuffer.VertexCount, // NumVertices
+						SurfaceCausticVertexBuffer->VertexCount, // NumVertices
 						0, // StartIndex
-						GSurfaceCausticIndexBuffer.IndexCount / 3, // NumPrimitives
+						SurfaceCausticIndexBuffer->IndexCount / 3, // NumPrimitives
 						1  // NumInstances
 					);
 
