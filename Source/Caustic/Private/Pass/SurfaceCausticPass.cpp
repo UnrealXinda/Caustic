@@ -281,7 +281,7 @@ void FSurfaceCausticPassRenderer::Render(const FLiquidParam& LiquidParam, FShade
 	{
 		ENQUEUE_RENDER_COMMAND(SurfaceCausticPassCommand)
 		(
-			[&LiquidParam, NormalTextureSRV, RenderTarget, this](FRHICommandListImmediate& RHICmdList)
+			[LiquidParam, NormalTextureSRV, RenderTarget, this](FRHICommandListImmediate& RHICmdList)
 			{
 				check(IsInRenderingThread());
 

@@ -217,7 +217,7 @@ void FSurfaceDepthPassRenderer::Render(const FLiquidParam& LiquidParam, FRHIText
 	{
 		ENQUEUE_RENDER_COMMAND(SurfaceDepthPassCommand)
 		(
-			[&LiquidParam, DepthTextureRef, this](FRHICommandListImmediate& RHICmdList)
+			[LiquidParam, DepthTextureRef, this](FRHICommandListImmediate& RHICmdList)
 			{
 				check(IsInRenderingThread());
 
