@@ -41,16 +41,9 @@ public:
 		return IsFeatureLevelSupported(Platform, ERHIFeatureLevel::SM5);
 	}
 
-	virtual bool Serialize(FArchive& Ar) override
-	{
-		bool bShaderHasOutdatedParameters = FGlobalShader::Serialize(Ar);
-		Ar << InputHeightTexture << OutputNormalTexture;
-		return bShaderHasOutdatedParameters;
-	}
-
 	void BindShaderTextures(FRHICommandList& RHICmdList, FUnorderedAccessViewRHIRef OutputTextureUAV, FShaderResourceViewRHIRef InputTextureSRV)
 	{
-		FRHIComputeShader* ComputeShaderRHI = GetComputeShader();
+		FRHIComputeShader* ComputeShaderRHI = RHICmdList.GetBoundComputeShader();
 
 		SetUAVParameter(RHICmdList, ComputeShaderRHI, OutputNormalTexture, OutputTextureUAV);
 		SetSRVParameter(RHICmdList, ComputeShaderRHI, InputHeightTexture, InputTextureSRV);
@@ -58,7 +51,7 @@ public:
 
 	void UnbindShaderTextures(FRHICommandList& RHICmdList)
 	{
-		FRHIComputeShader* ComputeShaderRHI = GetComputeShader();
+		FRHIComputeShader* ComputeShaderRHI = RHICmdList.GetBoundComputeShader();
 
 		SetUAVParameter(RHICmdList, ComputeShaderRHI, OutputNormalTexture, FUnorderedAccessViewRHIRef());
 		SetSRVParameter(RHICmdList, ComputeShaderRHI, InputHeightTexture, FShaderResourceViewRHIRef());
@@ -66,11 +59,11 @@ public:
 
 private:
 
-	FShaderResourceParameter InputHeightTexture;
-	FShaderResourceParameter OutputNormalTexture;
+	LAYOUT_FIELD(FShaderResourceParameter, InputHeightTexture);
+	LAYOUT_FIELD(FShaderResourceParameter, OutputNormalTexture);
 };
 
-IMPLEMENT_SHADER_TYPE(, FSurfaceNormalComputeShader, TEXT("/Plugin/Caustic/SurfaceNormalComputeShader.usf"), TEXT("ComputeSurfaceNormal"), SF_Compute);
+IMPLEMENT_GLOBAL_SHADER(FSurfaceNormalComputeShader, "/Plugin/Caustic/SurfaceNormalComputeShader.usf", "ComputeSurfaceNormal", SF_Compute);
 
 FSurfaceNormalPassRenderer::FSurfaceNormalPassRenderer() :
 	bInitiated(false)
@@ -117,13 +110,13 @@ void FSurfaceNormalPassRenderer::Render(FShaderResourceViewRHIRef HeightTextureS
 
 				// Bind shader textures
 				TShaderMapRef<FSurfaceNormalComputeShader> SurfaceNormalComputeShader(GetGlobalShaderMap(ERHIFeatureLevel::SM5));
-				RHICmdList.SetComputeShader(SurfaceNormalComputeShader->GetComputeShader());
+				RHICmdList.SetComputeShader(SurfaceNormalComputeShader.GetComputeShader());
 				SurfaceNormalComputeShader->BindShaderTextures(RHICmdList, OutputNormalTextureUAV, HeightTextureSRV);
 
 				// Dispatch shader
 				const int ThreadGroupCountX = StaticCast<int>(Config.TextureWidth / 32);
 				const int ThreadGroupCountY = StaticCast<int>(Config.TextureHeight / 32);
-				DispatchComputeShader(RHICmdList, *SurfaceNormalComputeShader, ThreadGroupCountX, ThreadGroupCountY, 1);
+				DispatchComputeShader(RHICmdList, SurfaceNormalComputeShader, ThreadGroupCountX, ThreadGroupCountY, 1);
 
 				// Unbind shader textures
 				SurfaceNormalComputeShader->UnbindShaderTextures(RHICmdList);

@@ -53,17 +53,10 @@ public:
 	{
 		return IsFeatureLevelSupported(Platform, ERHIFeatureLevel::SM5);
 	}
-	
-	virtual bool Serialize(FArchive& Ar) override
-	{
-		bool bShaderHasOutdatedParameters = FGlobalShader::Serialize(Ar);
-		Ar << InputDepthTexture << OutputDepthTexture;
-		return bShaderHasOutdatedParameters;
-	}
 
 	void BindShaderTextures(FRHICommandList& RHICmdList, FUnorderedAccessViewRHIRef OutputTextureUAV, FShaderResourceViewRHIRef InputTextureSRV)
 	{
-		FRHIComputeShader* ComputeShaderRHI = GetComputeShader();
+		FRHIComputeShader* ComputeShaderRHI = RHICmdList.GetBoundComputeShader();
 
 		SetUAVParameter(RHICmdList, ComputeShaderRHI, OutputDepthTexture, OutputTextureUAV);
 		SetSRVParameter(RHICmdList, ComputeShaderRHI, InputDepthTexture, InputTextureSRV);
@@ -71,7 +64,7 @@ public:
 
 	void UnbindShaderTextures(FRHICommandList& RHICmdList)
 	{
-		FRHIComputeShader* ComputeShaderRHI = GetComputeShader();
+		FRHIComputeShader* ComputeShaderRHI = RHICmdList.GetBoundComputeShader();
 
 		SetUAVParameter(RHICmdList, ComputeShaderRHI, OutputDepthTexture, FUnorderedAccessViewRHIRef());
 		SetSRVParameter(RHICmdList, ComputeShaderRHI, InputDepthTexture, FShaderResourceViewRHIRef());
@@ -79,14 +72,14 @@ public:
 
 	void SetShaderParameters(FRHICommandList& RHICmdList, const FSurfaceDepthComputeShaderParameters& Parameters)
 	{
-		FRHIComputeShader* ComputeShaderRHI = GetComputeShader();
+		FRHIComputeShader* ComputeShaderRHI = RHICmdList.GetBoundComputeShader();
 		SetUniformBufferParameterImmediate(RHICmdList, ComputeShaderRHI, GetUniformBufferParameter<FSurfaceDepthComputeShaderParameters>(), Parameters);
 	}
 
 private:
 
-	FShaderResourceParameter InputDepthTexture;
-	FShaderResourceParameter OutputDepthTexture;
+	LAYOUT_FIELD(FShaderResourceParameter, InputDepthTexture);
+	LAYOUT_FIELD(FShaderResourceParameter, OutputDepthTexture);
 };
 
 class FSurfaceHeightComputeShader : public FGlobalShader
@@ -114,13 +107,6 @@ public:
 		return IsFeatureLevelSupported(Platform, ERHIFeatureLevel::SM5);
 	}
 
-	virtual bool Serialize(FArchive& Ar) override
-	{
-		bool bShaderHasOutdatedParameters = FGlobalShader::Serialize(Ar);
-		Ar << OutputHeightTexture << CurDepthTexture << PrevDepthTexture;
-		return bShaderHasOutdatedParameters;
-	}
-
 	void BindShaderTextures(
 		FRHICommandList& RHICmdList,
 		FUnorderedAccessViewRHIRef OutputHeightTextureUAV,
@@ -128,8 +114,7 @@ public:
 		FShaderResourceViewRHIRef PrevDepthTextureSRV
 	)
 	{
-		FRHIComputeShader* ComputeShaderRHI = GetComputeShader();
-
+		FRHIComputeShader* ComputeShaderRHI = RHICmdList.GetBoundComputeShader();
 		SetUAVParameter(RHICmdList, ComputeShaderRHI, OutputHeightTexture, OutputHeightTextureUAV);
 		SetSRVParameter(RHICmdList, ComputeShaderRHI, CurDepthTexture, CurDepthTextureSRV);
 		SetSRVParameter(RHICmdList, ComputeShaderRHI, PrevDepthTexture, PrevDepthTextureSRV);
@@ -137,8 +122,7 @@ public:
 
 	void UnbindShaderTextures(FRHICommandList& RHICmdList)
 	{
-		FRHIComputeShader* ComputeShaderRHI = GetComputeShader();
-
+		FRHIComputeShader* ComputeShaderRHI = RHICmdList.GetBoundComputeShader();
 		SetUAVParameter(RHICmdList, ComputeShaderRHI, OutputHeightTexture, FUnorderedAccessViewRHIRef());
 		SetSRVParameter(RHICmdList, ComputeShaderRHI, CurDepthTexture, FShaderResourceViewRHIRef());
 		SetSRVParameter(RHICmdList, ComputeShaderRHI, PrevDepthTexture, FShaderResourceViewRHIRef());
@@ -146,19 +130,19 @@ public:
 
 	void SetShaderParameters(FRHICommandList& RHICmdList, const FSurfaceHeightComputeShaderParameters& Parameters)
 	{
-		FRHIComputeShader* ComputeShaderRHI = GetComputeShader();
+		FRHIComputeShader* ComputeShaderRHI = RHICmdList.GetBoundComputeShader();
 		SetUniformBufferParameterImmediate(RHICmdList, ComputeShaderRHI, GetUniformBufferParameter<FSurfaceHeightComputeShaderParameters>(), Parameters);
 	}
 
 private:
 
-	FShaderResourceParameter CurDepthTexture;
-	FShaderResourceParameter PrevDepthTexture;
-	FShaderResourceParameter OutputHeightTexture;
+	LAYOUT_FIELD(FShaderResourceParameter, CurDepthTexture);
+	LAYOUT_FIELD(FShaderResourceParameter, PrevDepthTexture);
+	LAYOUT_FIELD(FShaderResourceParameter, OutputHeightTexture);
 };
 
-IMPLEMENT_SHADER_TYPE(, FSurfaceDepthComputeShader, TEXT("/Plugin/Caustic/SurfaceDepthComputeShader.usf"), TEXT("ComputeSurfaceDepth"), SF_Compute);
-IMPLEMENT_SHADER_TYPE(, FSurfaceHeightComputeShader, TEXT("/Plugin/Caustic/SurfaceHeightComputeShader.usf"), TEXT("ComputeSurfaceHeight"), SF_Compute);
+IMPLEMENT_GLOBAL_SHADER(FSurfaceDepthComputeShader,  "/Plugin/Caustic/SurfaceDepthComputeShader.usf",  "ComputeSurfaceDepth",  SF_Compute);
+IMPLEMENT_GLOBAL_SHADER(FSurfaceHeightComputeShader, "/Plugin/Caustic/SurfaceHeightComputeShader.usf", "ComputeSurfaceHeight", SF_Compute);
 
 FSurfaceDepthPassRenderer::FSurfaceDepthPassRenderer() :
 	bInitiated(false)
@@ -230,16 +214,16 @@ void FSurfaceDepthPassRenderer::Render(const FLiquidParam& LiquidParam, FRHIText
 
 bool FSurfaceDepthPassRenderer::IsValidPass() const
 {
-	bool bValid = !!InputDepthTexture;
-	bValid &= !!InputDepthTextureSRV;
-	bValid &= !!OutputDepthTexture;
-	bValid &= !!OutputDepthTextureUAV;
-	bValid &= !!OutputDepthTextureSRV;
-	bValid &= !!OutputHeightTexture;
-	bValid &= !!OutputHeightTextureUAV;
-	bValid &= !!OutputHeightTextureSRV;
-	bValid &= !!PrevDepthTexture;
-	bValid &= !!PrevDepthTextureSRV;
+	bool bValid = !!InputDepthTexture
+		&& !!InputDepthTextureSRV
+		&& !!OutputDepthTexture
+		&& !!OutputDepthTextureUAV
+		&& !!OutputDepthTextureSRV
+		&& !!OutputHeightTexture
+		&& !!OutputHeightTextureUAV
+		&& !!OutputHeightTextureSRV
+		&& !!PrevDepthTexture
+		&& !!PrevDepthTextureSRV;
 
 	return bValid;
 }
@@ -252,7 +236,7 @@ void FSurfaceDepthPassRenderer::RenderSurfaceDepthPass(FRHICommandListImmediate&
 
 	// Bind shader textures
 	TShaderMapRef<FSurfaceDepthComputeShader> SurfaceDepthComputeShader(GetGlobalShaderMap(ERHIFeatureLevel::SM5));
-	RHICmdList.SetComputeShader(SurfaceDepthComputeShader->GetComputeShader());
+	RHICmdList.SetComputeShader(SurfaceDepthComputeShader.GetComputeShader());
 	SurfaceDepthComputeShader->BindShaderTextures(RHICmdList, OutputDepthTextureUAV, InputDepthTextureSRV);
 
 	// Bind shader uniform
@@ -265,7 +249,7 @@ void FSurfaceDepthPassRenderer::RenderSurfaceDepthPass(FRHICommandListImmediate&
 	// Dispatch shader
 	const int ThreadGroupCountX = StaticCast<int>(Config.TextureWidth / 32);
 	const int ThreadGroupCountY = StaticCast<int>(Config.TextureHeight / 32);
-	DispatchComputeShader(RHICmdList, *SurfaceDepthComputeShader, ThreadGroupCountX, ThreadGroupCountY, 1);
+	DispatchComputeShader(RHICmdList, SurfaceDepthComputeShader, ThreadGroupCountX, ThreadGroupCountY, 1);
 
 	// Unbind shader textures
 	SurfaceDepthComputeShader->UnbindShaderTextures(RHICmdList);
@@ -281,7 +265,7 @@ void FSurfaceDepthPassRenderer::RenderSurfaceHeightPass(FRHICommandListImmediate
 {
 	// Bind shader textures
 	TShaderMapRef<FSurfaceHeightComputeShader> SurfaceHeightComputeShader(GetGlobalShaderMap(ERHIFeatureLevel::SM5));
-	RHICmdList.SetComputeShader(SurfaceHeightComputeShader->GetComputeShader());
+	RHICmdList.SetComputeShader(SurfaceHeightComputeShader.GetComputeShader());
 	SurfaceHeightComputeShader->BindShaderTextures(RHICmdList, OutputHeightTextureUAV, OutputDepthTextureSRV, PrevDepthTextureSRV);
 
 	// Bind shader uniform
@@ -293,7 +277,7 @@ void FSurfaceDepthPassRenderer::RenderSurfaceHeightPass(FRHICommandListImmediate
 	// Dispatch shader
 	const int ThreadGroupCountX = StaticCast<int>(Config.TextureWidth / 32);
 	const int ThreadGroupCountY = StaticCast<int>(Config.TextureHeight / 32);
-	DispatchComputeShader(RHICmdList, *SurfaceHeightComputeShader, ThreadGroupCountX, ThreadGroupCountY, 1);
+	DispatchComputeShader(RHICmdList, SurfaceHeightComputeShader, ThreadGroupCountX, ThreadGroupCountY, 1);
 
 	// Unbind shader textures
 	SurfaceHeightComputeShader->UnbindShaderTextures(RHICmdList);

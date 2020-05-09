@@ -172,10 +172,9 @@ IMPLEMENT_GLOBAL_SHADER_PARAMETER_STRUCT(FSurfaceCausticVertexShaderParameters, 
 
 class FSurfaceCausticVertexShader : public FGlobalShader
 {
+public:
 
 	DECLARE_SHADER_TYPE(FSurfaceCausticVertexShader, Global);
-
-public:
 
 	FSurfaceCausticVertexShader() {}
 	FSurfaceCausticVertexShader(const ShaderMetaType::CompiledShaderInitializerType& Initializer) :
@@ -190,16 +189,9 @@ public:
 		return IsFeatureLevelSupported(Parameters.Platform, ERHIFeatureLevel::SM5);
 	}
 
-	virtual bool Serialize(FArchive& Ar) override
-	{
-		bool bShaderHasOutdatedParameters = FGlobalShader::Serialize(Ar);
-		Ar << InputNormalTexture << CausticPassSampler;
-		return bShaderHasOutdatedParameters;
-	}
-
 	void BindShaderTextures(FRHICommandList& RHICmdList, FShaderResourceViewRHIRef InputTextureSRV)
 	{
-		FRHIVertexShader* VertexShaderRHI = GetVertexShader();
+		FRHIVertexShader* VertexShaderRHI = RHICmdList.GetBoundVertexShader();
 		FRHISamplerState* SamplerStateLinear = TStaticSamplerState<SF_Bilinear, AM_Clamp, AM_Clamp, AM_Clamp>::GetRHI();
 
 		SetSRVParameter(RHICmdList, VertexShaderRHI, InputNormalTexture, InputTextureSRV);
@@ -208,28 +200,27 @@ public:
 
 	void UnbindShaderTextures(FRHICommandList& RHICmdList)
 	{
-		FRHIVertexShader* VertexShaderRHI = GetVertexShader();
+		FRHIVertexShader* VertexShaderRHI = RHICmdList.GetBoundVertexShader();
 		SetSRVParameter(RHICmdList, VertexShaderRHI, InputNormalTexture, FShaderResourceViewRHIRef());
 	}
 
 	void SetShaderParameters(FRHICommandList& RHICmdList, const FSurfaceCausticVertexShaderParameters& Parameters)
 	{
-		FRHIVertexShader* VertexShaderRHI = GetVertexShader();
+		FRHIVertexShader* VertexShaderRHI = RHICmdList.GetBoundVertexShader();
 		SetUniformBufferParameterImmediate(RHICmdList, VertexShaderRHI, GetUniformBufferParameter<FSurfaceCausticVertexShaderParameters>(), Parameters);
 	}
 
 private:
 
-	FShaderResourceParameter InputNormalTexture;
-	FShaderResourceParameter CausticPassSampler;
+	LAYOUT_FIELD(FShaderResourceParameter, InputNormalTexture);
+	LAYOUT_FIELD(FShaderResourceParameter, CausticPassSampler);
 };
 
 class FSurfaceCausticPixelShader : public FGlobalShader
 {
+public:
 
 	DECLARE_SHADER_TYPE(FSurfaceCausticPixelShader, Global);
-
-public:
 
 	FSurfaceCausticPixelShader() {}
 	FSurfaceCausticPixelShader(const ShaderMetaType::CompiledShaderInitializerType& Initializer) :
@@ -248,8 +239,8 @@ public:
 	}
 };
 
-IMPLEMENT_SHADER_TYPE(, FSurfaceCausticVertexShader, TEXT("/Plugin/Caustic/SurfaceCausticShader.usf"), TEXT("MainVS"), SF_Vertex)
-IMPLEMENT_SHADER_TYPE(, FSurfaceCausticPixelShader, TEXT("/Plugin/Caustic/SurfaceCausticShader.usf"), TEXT("MainPS"), SF_Pixel)
+IMPLEMENT_GLOBAL_SHADER(FSurfaceCausticVertexShader, "/Plugin/Caustic/SurfaceCausticShader.usf", "MainVS", SF_Vertex)
+IMPLEMENT_GLOBAL_SHADER(FSurfaceCausticPixelShader,  "/Plugin/Caustic/SurfaceCausticShader.usf", "MainPS", SF_Pixel)
 
 FSurfaceCausticPassRenderer::FSurfaceCausticPassRenderer() :
 	bInitiated(false),
@@ -303,7 +294,7 @@ void FSurfaceCausticPassRenderer::Render(const FLiquidParam& LiquidParam, FShade
 					);
 
 					// Get shaders
-					TShaderMap<FGlobalShaderType>* GlobalShaderMap = GetGlobalShaderMap(ERHIFeatureLevel::SM5);
+					FGlobalShaderMap* GlobalShaderMap = GetGlobalShaderMap(ERHIFeatureLevel::SM5);
 					TShaderMapRef<FSurfaceCausticVertexShader> VertexShader(GlobalShaderMap);
 					TShaderMapRef<FSurfaceCausticPixelShader> PixelShader(GlobalShaderMap);
 
@@ -318,8 +309,8 @@ void FSurfaceCausticPassRenderer::Render(const FLiquidParam& LiquidParam, FShade
 					GraphicsPSOInit.RasterizerState = TStaticRasterizerState<>::GetRHI();
 					GraphicsPSOInit.PrimitiveType = PT_TriangleList;
 					GraphicsPSOInit.BoundShaderState.VertexDeclarationRHI = VertexDesc.VertexDeclarationRHI;
-					GraphicsPSOInit.BoundShaderState.VertexShaderRHI = GETSAFERHISHADER_VERTEX(*VertexShader);
-					GraphicsPSOInit.BoundShaderState.PixelShaderRHI = GETSAFERHISHADER_PIXEL(*PixelShader);
+					GraphicsPSOInit.BoundShaderState.VertexShaderRHI = VertexShader.GetVertexShader();
+					GraphicsPSOInit.BoundShaderState.PixelShaderRHI = PixelShader.GetPixelShader();
 					SetGraphicsPipelineState(RHICmdList, GraphicsPSOInit);
 
 					// Update viewport
