@@ -310,6 +310,7 @@ void FSurfaceDepthPassRenderer::RenderSurfaceHeightPass(FRHICommandListImmediate
 	}
 }
 
+// Reference: https://github.com/AsehesL/UnityWaveEquation
 FVector4 FSurfaceDepthPassRenderer::EncodeLiquidParam(const FLiquidParam& LiquidParam) const
 {
 	const float SampleSpacing = 1.0f / LiquidParam.DepthTextureWidth;
